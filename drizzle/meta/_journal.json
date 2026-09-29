@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1788716983447,
+      "tag": "0000_curly_mach_iv",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788750363841,
+      "tag": "0001_lumpy_ted_forrester",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789497165841,
+      "tag": "0002_brainy_captain_flint",
+      "breakpoints": true
+    }
+  ]
+}
