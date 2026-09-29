@@ -10,7 +10,7 @@
     {
       "binding": "DB",
       "database_name": "diario-emocional-mqc",
-      "database_id": "00000000-0000-4000-8000-000000000000",
+      "database_id": "e6ad6e91-1b18-4990-8d22-05ca9e253af7",
       "migrations_dir": "drizzle"
     }
   ]
