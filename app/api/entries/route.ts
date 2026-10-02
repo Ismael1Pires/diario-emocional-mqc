@@ -2,9 +2,8 @@ import { and, desc, eq } from 'drizzle-orm';
 import { NextRequest } from 'next/server';
 import { getDb } from '@/db';
 import { emotionalEntries } from '@/db/schema';
+import { validEmotions } from '@/app/emotions';
 import { missingVisitorResponse, readVisitorId } from '../visitor';
-
-const validEmotions = ['alegria', 'calma', 'raiva', 'angústia', 'ansiedade', 'tristeza', 'medo'];
 
 export async function GET(request: NextRequest) {
   const visitorId = readVisitorId(request);

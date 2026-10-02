@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import Reflections from './reflections';
+import { disconnectionDetails, emotionGroup, emotionLabel, emotionMeta, validEmotions } from './emotions';
 
 type View = 'home' | 'new' | 'history' | 'patterns' | 'reminders' | 'reflections';
 
@@ -66,16 +67,6 @@ const LEAD_STORAGE_KEY = 'meu-diario-emocional-lead';
 const CONTACT_URL = `${JENIFFER_WHATSAPP}?text=${encodeURIComponent('Olá, Jeniffer. Conheci o Diário Emocional e gostaria de falar com você.')}`;
 const URGENT_CONTACT_URL = `${URGENT_WHATSAPP}?text=${encodeURIComponent('Olá, já uso o Diário Emocional e sinto que preciso avançar para o próximo nível com a mentoria. Como funciona?')}`;
 
-const emotionMeta: Record<string, { emoji: string; color: string; soft: string; phrase: string }> = {
-  alegria: { emoji: '☀️', color: '#b58a26', soft: '#f6e9bb', phrase: 'leve e expansiva' },
-  calma: { emoji: '🍃', color: '#66806b', soft: '#dfe9df', phrase: 'presente e serena' },
-  raiva: { emoji: '🔥', color: '#a95343', soft: '#f1d7cf', phrase: 'acesa e protetora' },
-  angústia: { emoji: '🌧️', color: '#75627e', soft: '#e6deea', phrase: 'apertada por dentro' },
-  ansiedade: { emoji: '〰️', color: '#ad6875', soft: '#f3dfe3', phrase: 'acelerada e alerta' },
-  tristeza: { emoji: '🌙', color: '#55738a', soft: '#dce7ee', phrase: 'recolhida e sensível' },
-  medo: { emoji: '🫧', color: '#7c6f54', soft: '#ebe5d6', phrase: 'insegura e cautelosa' },
-};
-
 const patternInsights: Record<string, string> = {
   'Autocobrança': 'Você pode estar tentando garantir valor e segurança através de exigência excessiva.',
   'Agradar para evitar conflito': 'Talvez exista uma necessidade de pertencimento sendo protegida.',
@@ -118,8 +109,8 @@ const initialDraft: EntryDraft = {
 };
 
 function emotionalScore(entry: Entry) {
-  const valence: Record<string, number> = { alegria: 1, calma: 0.75, raiva: -0.55, angústia: -0.85, ansiedade: -0.75, tristeza: -0.7, medo: -0.75 };
-  return Math.round(Math.max(0, Math.min(100, 50 + (valence[entry.emotion] ?? 0) * entry.intensity * 5)));
+  const valence: Record<string, number> = { alegria: 1, calma: 0.75, raiva: -0.55, angústia: -0.85, ansiedade: -0.75, tristeza: -0.7, medo: -0.75, desconexão: -0.6 };
+  return Math.round(Math.max(0, Math.min(100, 50 + (valence[emotionGroup(entry.emotion)] ?? 0) * entry.intensity * 5)));
 }
 
 function capitalize(value: string) {
@@ -151,6 +142,7 @@ export default function EmotionalJournal() {
   const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState<EntryDraft>(initialDraft);
   const [saving, setSaving] = useState(false);
+  const draftEmotionGroup = emotionGroup(draft.emotion);
   const [message, setMessage] = useState('');
   const [historyFilter, setHistoryFilter] = useState('todas');
   const [reminders, setReminders] = useState<ReminderForm>({ name: '', email: '', phone: '', times: ['09:00', '14:00', '20:30'] });
@@ -237,7 +229,7 @@ export default function EmotionalJournal() {
       inputSchema: {
         type: 'object',
         properties: {
-          emotion: { type: 'string', enum: Object.keys(emotionMeta) },
+          emotion: { type: 'string', enum: validEmotions },
           intensity: { type: 'integer', minimum: 1, maximum: 10 },
           trigger: { type: 'string' },
           event: { type: 'string' },
@@ -251,7 +243,7 @@ export default function EmotionalJournal() {
       annotations: { readOnlyHint: false, untrustedContentHint: true },
       execute: async (input: unknown) => {
         const value = input as Record<string, unknown>;
-        if (!emotionMeta[String(value.emotion)] || !Number.isInteger(value.intensity) || Number(value.intensity) < 1 || Number(value.intensity) > 10) {
+        if (!validEmotions.includes(String(value.emotion)) || !Number.isInteger(value.intensity) || Number(value.intensity) < 1 || Number(value.intensity) > 10) {
           throw new Error('Emoção ou intensidade inválida.');
         }
         const entry = await createEntry({
@@ -301,7 +293,7 @@ export default function EmotionalJournal() {
 
   const emotionCounts = useMemo(() => Object.keys(emotionMeta).map((emotion) => ({
     emotion,
-    count: last30.filter((entry) => entry.emotion === emotion).length,
+    count: last30.filter((entry) => emotionGroup(entry.emotion) === emotion).length,
   })).sort((a, b) => b.count - a.count), [last30]);
 
   const weekBars = useMemo(() => Array.from({ length: 7 }, (_, index) => {
@@ -445,7 +437,7 @@ export default function EmotionalJournal() {
     const counts = (field: 'emotion' | 'trigger' | 'pattern') => {
       const result = new Map<string, number>();
       entries.forEach((entry) => {
-        const value = entry[field];
+        const value = field === 'emotion' ? emotionGroup(entry.emotion) : entry[field];
         if (value) result.set(value, (result.get(value) ?? 0) + 1);
       });
       return [...result.entries()].sort((a, b) => b[1] - a[1]);
@@ -459,7 +451,7 @@ export default function EmotionalJournal() {
       .map((entry) => `
         <article class="entry">
           <div class="entry-head">
-            <div><span>${escapeHtml(formatDate(entry.occurredAt, true))}</span><h2>${escapeHtml(capitalize(entry.emotion))}</h2></div>
+            <div><span>${escapeHtml(formatDate(entry.occurredAt, true))}</span><h2>${escapeHtml(emotionLabel(entry.emotion))}</h2></div>
             <strong>${entry.intensity}/10</strong>
           </div>
           <p>${escapeHtml(entry.event)}</p>
@@ -643,11 +635,25 @@ export default function EmotionalJournal() {
               <div className="step-label"><span>1</span> O que você está sentindo?</div>
               <div className="emotion-picker">
                 {Object.entries(emotionMeta).map(([emotion, meta]) => (
-                  <button type="button" key={emotion} className={`emotion-choice ${draft.emotion === emotion ? 'selected' : ''}`} onClick={() => setDraft({ ...draft, emotion })} aria-pressed={draft.emotion === emotion}>
+                  <button type="button" key={emotion} className={`emotion-choice ${draftEmotionGroup === emotion ? 'selected' : ''}`} onClick={() => setDraft({ ...draft, emotion: draftEmotionGroup === emotion ? draft.emotion : emotion })} aria-pressed={draftEmotionGroup === emotion}>
                     <span style={{ background: meta.soft }}>{meta.emoji}</span><strong>{capitalize(emotion)}</strong><small>{meta.phrase}</small>
                   </button>
                 ))}
               </div>
+              {draftEmotionGroup === 'desconexão' && (
+                <fieldset className="emotion-details">
+                  <legend>Aprofundando a desconexão</legend>
+                  <p>Como ela aparece para você? Se quiser, escolha o detalhe que mais se aproxima do que sente.</p>
+                  <div className="emotion-detail-picker">
+                    {disconnectionDetails.map((detail) => (
+                      <button type="button" key={detail.emotion} className={`emotion-choice ${draft.emotion === detail.emotion ? 'selected' : ''}`} aria-pressed={draft.emotion === detail.emotion} onClick={() => setDraft({ ...draft, emotion: draft.emotion === detail.emotion ? 'desconexão' : detail.emotion })}>
+                        <strong>{detail.label}</strong><small>{detail.description}</small>
+                      </button>
+                    ))}
+                  </div>
+                  <button type="button" className="text-link" aria-pressed={draft.emotion === 'desconexão'} onClick={() => setDraft({ ...draft, emotion: 'desconexão' })}>Prefiro não especificar</button>
+                </fieldset>
+              )}
               <div className="intensity-row">
                 <div><label htmlFor="intensity">Qual a intensidade?</label><span>1 é suave • 10 é muito intensa</span></div>
                 <strong>{draft.intensity}</strong>
@@ -658,11 +664,11 @@ export default function EmotionalJournal() {
             <section className="surface form-section">
               <div className="step-label"><span>2</span> Vamos desenhar o que aconteceu</div>
               <div className="field-grid">
-                <label className="field"><span>O que aconteceu?</span><textarea required rows={4} value={draft.event} onChange={(event) => setDraft({ ...draft, event: event.target.value })} placeholder="Conte a cena com suas palavras, sem precisar organizar tudo…" /></label>
+                <label className="field"><span>O que aconteceu?</span><textarea required rows={4} value={draft.event} onChange={(event) => setDraft({ ...draft, event: event.target.value })} placeholder={draftEmotionGroup === 'desconexão' ? 'Quando percebeu essa desconexão? De quem, do quê ou de si você se sentiu distante?' : 'Conte a cena com suas palavras, sem precisar organizar tudo…'} /></label>
                 <label className="field"><span>Qual foi o gatilho principal?</span><select required value={draft.trigger} onChange={(event) => setDraft({ ...draft, trigger: event.target.value })}><option value="">Selecione</option>{triggers.map((trigger) => <option key={trigger}>{trigger}</option>)}</select></label>
-                <label className="field"><span>Que pensamento veio na hora?</span><textarea rows={3} value={draft.thought} onChange={(event) => setDraft({ ...draft, thought: event.target.value })} placeholder="Ex.: eu não vou dar conta, ninguém me escuta…" /></label>
-                <label className="field"><span>Onde isso apareceu no corpo?</span><input value={draft.bodySensation} onChange={(event) => setDraft({ ...draft, bodySensation: event.target.value })} placeholder="Peito apertado, calor, nó na garganta…" /></label>
-                <label className="field"><span>Como você reagiu?</span><textarea rows={3} value={draft.reaction} onChange={(event) => setDraft({ ...draft, reaction: event.target.value })} placeholder="O que você fez, disse ou evitou?" /></label>
+                <label className="field"><span>Que pensamento veio na hora?</span><textarea rows={3} value={draft.thought} onChange={(event) => setDraft({ ...draft, thought: event.target.value })} placeholder={draftEmotionGroup === 'desconexão' ? 'Que pensamentos vieram? Também pode contar se foi difícil perceber algum.' : 'Ex.: eu não vou dar conta, ninguém me escuta…'} /></label>
+                <label className="field"><span>Onde isso apareceu no corpo?</span><input value={draft.bodySensation} onChange={(event) => setDraft({ ...draft, bodySensation: event.target.value })} placeholder={draftEmotionGroup === 'desconexão' ? 'Como estava seu corpo? Foi possível notar alguma sensação?' : 'Peito apertado, calor, nó na garganta…'} /></label>
+                <label className="field"><span>Como você reagiu?</span><textarea rows={3} value={draft.reaction} onChange={(event) => setDraft({ ...draft, reaction: event.target.value })} placeholder={draftEmotionGroup === 'desconexão' ? 'Você se afastou, ficou no automático ou percebeu outra reação?' : 'O que você fez, disse ou evitou?'} /></label>
               </div>
             </section>
 
@@ -670,7 +676,7 @@ export default function EmotionalJournal() {
               <div className="step-label"><span>3</span> Transforme a cena em compreensão</div>
               <div className="field-grid two">
                 <label className="field"><span>Que padrão você reconhece?</span><select value={draft.pattern} onChange={(event) => setDraft({ ...draft, pattern: event.target.value })}><option value="">Ainda não sei</option>{patterns.map((pattern) => <option key={pattern}>{pattern}</option>)}</select></label>
-                <label className="field"><span>Do que você precisava naquele momento?</span><textarea rows={3} value={draft.need} onChange={(event) => setDraft({ ...draft, need: event.target.value })} placeholder="Acolhimento, segurança, limite, clareza…" /></label>
+                <label className="field"><span>Do que você precisava naquele momento?</span><textarea rows={3} value={draft.need} onChange={(event) => setDraft({ ...draft, need: event.target.value })} placeholder={draftEmotionGroup === 'desconexão' ? 'Descanso, espaço, companhia, algo que faça sentido para você…' : 'Acolhimento, segurança, limite, clareza…'} /></label>
               </div>
               <div className="form-footer"><p><Heart size={16} /> Você não precisa se julgar para se compreender.</p><button className="wine-btn" disabled={saving}>{saving ? <><Loader2 className="spin" size={17} /> Salvando…</> : <>Guardar meu registro <ChevronRight size={17} /></>}</button></div>
             </section>
@@ -688,11 +694,11 @@ export default function EmotionalJournal() {
             </div>
             {showingDemo && <div className="demo-note"><Sparkles size={16} /><div><strong>Histórico de exemplo</strong><span>Faça seu primeiro registro para substituir estes exemplos.</span></div></div>}
             <div className="timeline">
-              {displayEntries.filter((entry) => historyFilter === 'todas' || entry.emotion === historyFilter).map((entry) => {
-                const meta = emotionMeta[entry.emotion] ?? emotionMeta.calma;
+              {displayEntries.filter((entry) => historyFilter === 'todas' || emotionGroup(entry.emotion) === historyFilter).map((entry) => {
+                const meta = emotionMeta[emotionGroup(entry.emotion)] ?? emotionMeta.calma;
                 return <article className="surface history-card" key={entry.id}>
                   <div className="history-dot" style={{ background: meta.soft }}>{meta.emoji}</div>
-                  <div className="history-main"><div className="history-top"><div><span>{formatDate(entry.occurredAt, true)}</span><h2>{capitalize(entry.emotion)} <small>intensidade {entry.intensity}/10</small></h2></div>{!entry.demo && <button className="delete-btn" onClick={() => void removeEntry(entry.id)} aria-label="Excluir registro"><Trash2 size={16} /></button>}</div>
+                  <div className="history-main"><div className="history-top"><div><span>{formatDate(entry.occurredAt, true)}</span><h2>{emotionLabel(entry.emotion)} <small>intensidade {entry.intensity}/10</small></h2></div>{!entry.demo && <button className="delete-btn" onClick={() => void removeEntry(entry.id)} aria-label="Excluir registro"><Trash2 size={16} /></button>}</div>
                   <p className="event-copy">{entry.event}</p>
                   <div className="history-tags"><span>Gatilho: {entry.trigger || 'não identificado'}</span>{entry.pattern && <span>Padrão: {entry.pattern}</span>}</div>
                   {(entry.thought || entry.need) && <div className="history-reflection">{entry.thought && <p><strong>Pensamento:</strong> “{entry.thought}”</p>}{entry.need && <p><strong>Necessidade:</strong> {entry.need}</p>}</div>}</div>
