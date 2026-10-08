@@ -1,0 +1,6 @@
+# Configure on the Worker via secrets or ignored .dev.vars; NEVER use NEXT_PUBLIC_.
+# AUTH_ORIGIN is the exact HTTPS app origin, without a trailing slash or path.
+AUTH_ORIGIN=https://diario.example.com
+AUTH_SECRET=REPLACE_WITH_RANDOM_SECRET_OF_AT_LEAST_32_BYTES
+AUTH_EMAIL_FROM=Meu Diario Emocional <acesso@example.com>
+RESEND_API_KEY=REPLACE_WITH_RESTRICTED_SENDING_KEY

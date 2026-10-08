@@ -23,6 +23,9 @@ import {
 } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import Reflections from './reflections';
+import MarketingSignup from './marketing-signup';
+import AuthGate, { type User } from './auth-gate';
+import { apiFetch } from './client-api';
 import { disconnectionDetails, emotionGroup, emotionLabel, emotionMeta, validEmotions } from './emotions';
 
 type View = 'home' | 'new' | 'history' | 'patterns' | 'reminders' | 'reflections';
@@ -59,11 +62,11 @@ type LeadProfile = {
   email: string;
 };
 
-type LeadDraft = Omit<LeadProfile, 'id'> & { consent: boolean };
+
 
 const JENIFFER_WHATSAPP = 'https://wa.me/5551995713828';
 const URGENT_WHATSAPP = 'https://wa.me/5551995455011';
-const LEAD_STORAGE_KEY = 'meu-diario-emocional-lead';
+
 const CONTACT_URL = `${JENIFFER_WHATSAPP}?text=${encodeURIComponent('Olá, Jeniffer. Conheci o Diário Emocional e gostaria de falar com você.')}`;
 const URGENT_CONTACT_URL = `${URGENT_WHATSAPP}?text=${encodeURIComponent('Olá, já uso o Diário Emocional e sinto que preciso avançar para o próximo nível com a mentoria. Como funciona?')}`;
 
@@ -137,6 +140,11 @@ function escapeHtml(value: unknown) {
 }
 
 export default function EmotionalJournal() {
+  return <AuthGate>{(user, logout) => <Journal key={user.id} user={user} logout={logout} />}</AuthGate>;
+}
+
+function Journal({ user, logout }: { user: User; logout: () => Promise<void> }) {
+  const profile: LeadProfile = { ...user, whatsapp: '' };
   const [view, setView] = useState<View>('home');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -145,36 +153,12 @@ export default function EmotionalJournal() {
   const draftEmotionGroup = emotionGroup(draft.emotion);
   const [message, setMessage] = useState('');
   const [historyFilter, setHistoryFilter] = useState('todas');
-  const [reminders, setReminders] = useState<ReminderForm>({ name: '', email: '', phone: '', times: ['09:00', '14:00', '20:30'] });
+  const [reminders, setReminders] = useState<ReminderForm>({ name: user.name, email: user.email, phone: '', times: ['09:00', '14:00', '20:30'] });
   const [savingReminders, setSavingReminders] = useState(false);
-  const [profile, setProfile] = useState<LeadProfile | null>(null);
-  const [registrationResolved, setRegistrationResolved] = useState(false);
-  const [leadDraft, setLeadDraft] = useState<LeadDraft>({ name: '', whatsapp: '', email: '', consent: false });
-  const [registering, setRegistering] = useState(false);
-  const [registrationError, setRegistrationError] = useState('');
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(LEAD_STORAGE_KEY);
-      if (stored) {
-        const value = JSON.parse(stored) as LeadProfile;
-        if (value.id && value.name && value.whatsapp) {
-          setProfile(value);
-          setReminders((current) => ({ ...current, name: value.name, email: value.email ?? '', phone: value.whatsapp }));
-        }
-      }
-    } catch {
-      localStorage.removeItem(LEAD_STORAGE_KEY);
-    } finally {
-      setRegistrationResolved(true);
-    }
-  }, []);
-
   const loadData = useCallback(async () => {
     if (!profile?.id) return;
     try {
-      const headers = { 'X-Visitor-ID': profile.id };
-      const [entriesResponse, settingsResponse] = await Promise.all([fetch('/api/entries', { headers }), fetch('/api/settings', { headers })]);
+      const [entriesResponse, settingsResponse] = await Promise.all([apiFetch('/api/entries'), apiFetch('/api/settings')]);
       if (entriesResponse.ok) {
         const data = await entriesResponse.json() as { entries: Entry[] };
         setEntries(data.entries ?? []);
@@ -203,9 +187,9 @@ export default function EmotionalJournal() {
 
   const createEntry = useCallback(async (payload: EntryDraft) => {
     if (!profile?.id) throw new Error('Faça seu cadastro para continuar.');
-    const response = await fetch('/api/entries', {
+    const response = await apiFetch('/api/entries', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Visitor-ID': profile.id },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     const data = await response.json() as { entry?: Entry; error?: string };
@@ -336,7 +320,7 @@ export default function EmotionalJournal() {
   async function removeEntry(id: string) {
     if (!window.confirm('Excluir este registro? Essa ação não pode ser desfeita.')) return;
     if (!profile?.id) return;
-    const response = await fetch(`/api/entries?id=${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-Visitor-ID': profile.id } });
+    const response = await apiFetch(`/api/entries?id=${encodeURIComponent(id)}`, { method: 'DELETE',  });
     if (response.ok) setEntries((current) => current.filter((entry) => entry.id !== id));
     else setMessage('Não foi possível excluir o registro.');
   }
@@ -346,9 +330,9 @@ export default function EmotionalJournal() {
     setSavingReminders(true);
     try {
       if (!profile?.id) throw new Error();
-      const response = await fetch('/api/settings', {
+      const response = await apiFetch('/api/settings', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-Visitor-ID': profile.id },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(reminders),
       });
       if (!response.ok) throw new Error();
@@ -357,29 +341,6 @@ export default function EmotionalJournal() {
       setMessage('Não foi possível salvar os horários agora.');
     } finally {
       setSavingReminders(false);
-    }
-  }
-
-  async function handleRegistration(event: FormEvent) {
-    event.preventDefault();
-    setRegistering(true);
-    setRegistrationError('');
-    try {
-      const response = await fetch('/api/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(leadDraft),
-      });
-      const data = await response.json() as { lead?: LeadProfile; error?: string };
-      if (!response.ok || !data.lead) throw new Error(data.error ?? 'Não foi possível concluir seu cadastro.');
-      const nextProfile = data.lead;
-      localStorage.setItem(LEAD_STORAGE_KEY, JSON.stringify(nextProfile));
-      setReminders((current) => ({ ...current, name: nextProfile.name, email: nextProfile.email ?? '', phone: nextProfile.whatsapp }));
-      setProfile(nextProfile);
-    } catch (error) {
-      setRegistrationError(error instanceof Error ? error.message : 'Não foi possível concluir seu cadastro agora.');
-    } finally {
-      setRegistering(false);
     }
   }
 
@@ -483,64 +444,6 @@ export default function EmotionalJournal() {
     { id: 'reminders' as View, label: 'Lembretes', short: 'Lembretes', icon: Bell },
   ];
 
-  if (!registrationResolved) {
-    return <div className="registration-loading" aria-label="Carregando"><Loader2 className="spin" size={24} /></div>;
-  }
-
-  if (!profile) {
-    return (
-      <main className="registration-shell">
-        <section className="registration-brand-panel">
-          <img className="registration-logo" src="/brand/jeniffer-logo.png" alt="Jeniffer Pires" />
-          <div className="registration-message">
-            <div className="eyebrow light">Seu espaço de cuidado começa aqui</div>
-            <h1>Bem-vinda ao<br />Diário Emocional.</h1>
-            <p>Registre o que sente, compreenda seus gatilhos e acompanhe seus padrões com mais clareza e gentileza.</p>
-          </div>
-          <div className="registration-person">
-            <img src="/brand/jeniffer-pires.jpeg" alt="Jeniffer Pires escrevendo em um diário" />
-            <div><strong>Jeniffer Pires</strong><span>Terapeuta cristã & mentoria emocional</span></div>
-          </div>
-        </section>
-
-        <section className="registration-form-panel">
-          <form className="registration-form" onSubmit={handleRegistration}>
-            <div className="registration-icon"><BookHeart size={25} /></div>
-            <div className="eyebrow">Acesso gratuito</div>
-            <h2>Crie seu espaço pessoal</h2>
-            <p className="registration-intro">Preencha seus dados para entrar e receber lembretes de cuidado. Seu diário ficará separado dos demais visitantes neste navegador.</p>
-            <label className="field">
-              <span>Seu nome</span>
-              <input required autoComplete="name" maxLength={100} value={leadDraft.name} onChange={(event) => setLeadDraft({ ...leadDraft, name: event.target.value })} placeholder="Como você quer ser chamada?" />
-            </label>
-            <label className="field">
-              <span>WhatsApp</span>
-              <input required type="tel" inputMode="tel" autoComplete="tel" maxLength={20} value={leadDraft.whatsapp} onChange={(event) => setLeadDraft({ ...leadDraft, whatsapp: event.target.value })} placeholder="(00) 00000-0000" />
-            </label>
-            <label className="field">
-              <span>E-mail <small>opcional</small></span>
-              <input type="email" autoComplete="email" maxLength={180} value={leadDraft.email} onChange={(event) => setLeadDraft({ ...leadDraft, email: event.target.value })} placeholder="voce@email.com" />
-            </label>
-            <label className="consent-field">
-              <input required type="checkbox" checked={leadDraft.consent} onChange={(event) => setLeadDraft({ ...leadDraft, consent: event.target.checked })} />
-              <span>Aceito receber lembretes e conteúdos da Jeniffer pelo WhatsApp e, se eu informar, também por e-mail.</span>
-            </label>
-            {registrationError && <div className="registration-error" role="alert">{registrationError}</div>}
-            <button className="wine-btn full registration-submit" disabled={registering}>
-              {registering ? <><Loader2 className="spin" size={17} /> Criando seu espaço…</> : <>Entrar no meu diário <ChevronRight size={17} /></>}
-            </button>
-            <p className="registration-privacy"><LockKeyhole size={13} /> Use sempre este navegador para manter acesso ao seu histórico pessoal.</p>
-          </form>
-        </section>
-
-        <a className="urgent-help registration-urgent" href={URGENT_CONTACT_URL} target="_blank" rel="noreferrer" title="Conheça a mentoria da Jeniffer. O retorno pelo WhatsApp pode não ser imediato.">
-          <TriangleAlert size={21} />
-          <span><small>Mentoria com a Jeniffer</small><strong>Quero avançar para o próximo nível.</strong></span>
-        </a>
-      </main>
-    );
-  }
-
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -555,6 +458,7 @@ export default function EmotionalJournal() {
             </button>
           ))}
         </nav>
+        <button className="outline-btn" onClick={() => void logout()}>Sair da conta</button>
         <div className="privacy-note"><LockKeyhole size={14} /><span>Seu espaço privado de auto-observação.</span></div>
         <p className="side-quote">“Nomear o que sentimos é o primeiro gesto de cuidado.”<span>Biblioteca Método da Cura</span></p>
       </aside>
@@ -563,6 +467,7 @@ export default function EmotionalJournal() {
         <header className="topbar">
           <div><div className="eyebrow">Seu espaço de acolhimento</div><h1 className="welcome">{view === 'new' ? 'Vamos dar nome ao que aconteceu.' : view === 'history' ? 'Sua história emocional, com gentileza.' : view === 'patterns' ? 'O que se repete também pode mudar.' : view === 'reminders' ? 'Crie pequenas pausas no seu dia.' : 'Como está seu mundo aí dentro?'}</h1></div>
           <div className="topbar-actions">
+            <button className="outline-btn compact-btn" onClick={() => void logout()}>Sair</button>
             <a className="contact-btn compact-btn" href={CONTACT_URL} target="_blank" rel="noreferrer"><MessageCircle size={16} /> Falar com Jeniffer</a>
             <img className="avatar-photo" src="/brand/jeniffer-pires.jpeg" alt="Jeniffer Pires" />
           </div>
@@ -570,7 +475,7 @@ export default function EmotionalJournal() {
 
         {message && <div className="toast-message" role="status"><Check size={17} />{message}<button onClick={() => setMessage('')} aria-label="Fechar aviso">×</button></div>}
 
-        <div hidden={view !== 'reflections'}><Reflections visitorId={profile.id} /></div>
+        <div hidden={view !== 'reflections'}><Reflections /></div>
 
         {view === 'home' && (
           <>
@@ -734,6 +639,7 @@ export default function EmotionalJournal() {
           </>
         )}
 
+        {view === 'reminders' && <MarketingSignup />}
         {view === 'reminders' && (
           <section className="reminder-layout">
             <article className="surface reminder-intro">
@@ -775,3 +681,4 @@ export default function EmotionalJournal() {
     </div>
   );
 }
+

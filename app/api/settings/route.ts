@@ -2,45 +2,63 @@ import { eq } from 'drizzle-orm';
 import { NextRequest } from 'next/server';
 import { getDb } from '@/db';
 import { reminderSettings } from '@/db/schema';
-import { missingVisitorResponse, readVisitorId } from '../visitor';
+import { requireUser, readJson, text, HttpError, json } from '../auth/core';
+import { authEnv, guarded } from '../auth/server';
 
 export async function GET(request: NextRequest) {
-  const visitorId = readVisitorId(request);
-  if (!visitorId) return missingVisitorResponse();
-  try {
-    const [settings] = await getDb().select().from(reminderSettings).where(eq(reminderSettings.id, visitorId)).limit(1);
-    return Response.json({ settings: settings ?? null });
-  } catch (error) {
-    console.error('Could not load settings', error);
-    return Response.json({ error: 'Não foi possível carregar os lembretes.' }, { status: 500 });
-  }
+  return guarded(async () => {
+    const user = await requireUser(request, authEnv());
+    try {
+      const [settings] = await getDb()
+        .select()
+        .from(reminderSettings)
+        .where(eq(reminderSettings.userId, user.id))
+        .limit(1);
+      return json({ settings: settings ?? null });
+    } catch (error) {
+      if (error instanceof HttpError) throw error;
+      return json({ error: 'Não foi possível carregar os lembretes.' }, 500);
+    }
+  });
 }
 
 export async function PUT(request: NextRequest) {
-  const visitorId = readVisitorId(request);
-  if (!visitorId) return missingVisitorResponse();
-  try {
-    const body = (await request.json()) as Record<string, unknown>;
-    const times = Array.isArray(body.times)
-      ? body.times.map(String).filter((value) => /^([01]\\d|2[0-3]):[0-5]\\d$/.test(value)).slice(0, 3)
-      : [];
-    if (!times.length) return Response.json({ error: 'Escolha ao menos um horário.' }, { status: 400 });
+  return guarded(async () => {
+    const user = await requireUser(request, authEnv());
+    const visitorId = user.id;
+    try {
+      const body = await readJson(request);
+      const times = body.times;
+      if (
+        !Array.isArray(times) ||
+        times.length < 1 ||
+        times.length > 3 ||
+        !times.every(
+          (value) =>
+            typeof value === 'string' &&
+            /^([01]\d|2[0-3]):[0-5]\d$/.test(value),
+        )
+      )
+        throw new HttpError(400, 'Escolha de um a três horários válidos.');
 
-    const values = {
-      id: visitorId,
-      name: String(body.name ?? '').slice(0, 100),
-      email: String(body.email ?? '').slice(0, 180),
-      phone: String(body.phone ?? '').slice(0, 40),
-      times: JSON.stringify(times),
-      updatedAt: new Date(),
-    };
-    await getDb().insert(reminderSettings).values(values).onConflictDoUpdate({
-      target: reminderSettings.id,
-      set: values,
-    });
-    return Response.json({ settings: values });
-  } catch (error) {
-    console.error('Could not save settings', error);
-    return Response.json({ error: 'Não foi possível salvar os lembretes.' }, { status: 500 });
-  }
+      const values = {
+        id: visitorId,
+        userId: user.id,
+        name: text(body.name, 100),
+        email: text(body.email, 180),
+        phone: text(body.phone, 40),
+        times: JSON.stringify(times),
+        updatedAt: new Date(),
+      };
+      const { id: _id, ...updates } = values;
+      await getDb().insert(reminderSettings).values(values).onConflictDoUpdate({
+        target: reminderSettings.userId,
+        set: updates,
+      });
+      return json({ settings: values });
+    } catch (error) {
+      if (error instanceof HttpError) throw error;
+      return json({ error: 'Não foi possível salvar os lembretes.' }, 500);
+    }
+  });
 }
