@@ -211,11 +211,12 @@ void test('checkout, portal and status require a valid session; mutations enforc
   await rejects(() => createCheckout(request('/api/billing/checkout', undefined, {}), billingEnv, fake.sdk), 401);
   await rejects(() => createPortal(request('/api/billing/portal'), billingEnv, fake.sdk), 401);
   await rejects(() => getStatus(request('/api/billing/status', undefined, undefined, {}, 'GET'), billingEnv), 401);
-  for (const headers of [
+  const hostileHeaders: Record<string, string>[] = [
     { origin: 'https://attacker.test' },
     { 'x-diary-request': '' },
     { 'sec-fetch-site': 'cross-site' },
-  ]) {
+  ];
+  for (const headers of hostileHeaders) {
     await rejects(() => createCheckout(request('/api/billing/checkout', a, {}, headers), billingEnv, fake.sdk), 403);
     await rejects(() => createPortal(request('/api/billing/portal', a, {}, headers), billingEnv, fake.sdk), 403);
   }

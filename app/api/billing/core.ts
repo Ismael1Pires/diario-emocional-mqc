@@ -39,7 +39,7 @@ export function billingConfig(env: BillingEnv): Scope {
 }
 export async function verifyStripeAccount(env: BillingEnv, stripe: Stripe) {
   const scope = billingConfig(env);
-  const account = await stripe.accounts.retrieve();
+  const account = await stripe.accounts.retrieve(null);
   if (account.id !== scope.account) throw unavailable();
   return scope;
 }
