@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 class Statement {
   constructor(
     private database: DatabaseSync,
@@ -23,9 +23,12 @@ class Statement {
       meta: {},
     };
   }
-  async run() {
+  runSync() {
     const result = this.statement().run(...(this.args as never[]));
     return { success: true, results: [], meta: { changes: result.changes } };
+  }
+  async run() {
+    return this.runSync();
   }
   async raw() {
     const statement = this.statement();
@@ -45,12 +48,9 @@ export function reset() {
   sqlite?.close();
   sqlite = new DatabaseSync(':memory:');
   sqlite.exec('PRAGMA foreign_keys = ON');
-  for (const file of [
-    '0000_curly_mach_iv.sql',
-    '0001_lumpy_ted_forrester.sql',
-    '0002_brainy_captain_flint.sql',
-    '0003_secure_auth.sql',
-  ])
+  for (const file of readdirSync('drizzle')
+    .filter((name) => /^\d{4}_.+\.sql$/.test(name))
+    .sort())
     sqlite.exec(readFileSync(`drizzle/${file}`, 'utf8'));
   env.DB = {
     prepare(sql: string) {
@@ -60,7 +60,9 @@ export function reset() {
       sqlite.exec('BEGIN');
       try {
         const results = [];
-        for (const statement of statements) results.push(await statement.run());
+        // D1 batches are atomic. Do not yield between SQLite statements and
+        // create impossible nested transactions during concurrency tests.
+        for (const statement of statements) results.push(statement.runSync());
         sqlite.exec('COMMIT');
         return results;
       } catch (e) {

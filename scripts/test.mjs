@@ -3,8 +3,9 @@ import { mkdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 await mkdir('work/tests', { recursive: true });
 await build({
-  entryPoints: ['tests/security.test.ts'],
-  outfile: 'work/tests/security.test.mjs',
+  entryPoints: ['tests/security.test.ts', 'tests/billing.test.ts'],
+  outdir: 'work/tests',
+  outExtension: { '.js': '.mjs' },
   bundle: true,
   platform: 'node',
   format: 'esm',
@@ -22,7 +23,7 @@ await build({
 });
 const result = spawnSync(
   process.execPath,
-  ['--test', 'work/tests/security.test.mjs'],
+  ['--test', 'work/tests/security.test.mjs', 'work/tests/billing.test.mjs'],
   { stdio: 'inherit' },
 );
 process.exitCode = result.status ?? 1;

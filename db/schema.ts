@@ -4,6 +4,8 @@ import {
   uniqueIndex,
   index,
   integer,
+  primaryKey,
+  foreignKey,
   sqliteTable,
   text,
 } from 'drizzle-orm/sqlite-core';
@@ -141,3 +143,92 @@ export const legacyMigrationAudit = sqliteTable(
     ),
   ],
 );
+
+export const billingCustomers = sqliteTable('billing_customers', {
+  userId: text('user_id').notNull().references(() => authUsers.id),
+  accountId: text('account_id').notNull(),
+  mode: text('mode').notNull(),
+  customerId: text('customer_id'),
+  creationId: text('creation_id').notNull(),
+  creationStartedAt: integer('creation_started_at').notNull(),
+  email: text('email').notNull(),
+  name: text('name').notNull(),
+}, t => [
+  primaryKey({ columns: [t.userId, t.accountId, t.mode] }),
+  uniqueIndex('billing_customers_remote').on(t.accountId, t.mode, t.customerId),
+  check('billing_customers_mode', sql`${t.mode} IN ('test','live')`),
+]);
+export const billingCheckoutAttempts = sqliteTable('billing_checkout_attempts', {
+  accountId: text('account_id').notNull(),
+  mode: text('mode').notNull(),
+  requestId: text('request_id').notNull(),
+  userId: text('user_id').notNull().references(() => authUsers.id),
+  offerKey: text('offer_key').notNull(),
+  priceId: text('price_id').notNull(),
+  checkoutMode: text('checkout_mode').notNull(),
+  customerId: text('customer_id').notNull(),
+  startedAt: integer('started_at').notNull(),
+  returnOrigin: text('return_origin').notNull(),
+  sessionId: text('session_id'),
+  url: text('url'),
+}, t => [
+  primaryKey({ columns: [t.accountId, t.mode, t.requestId] }),
+  uniqueIndex('billing_attempts_session').on(t.accountId, t.mode, t.sessionId),
+  index('billing_attempts_user').on(t.userId, t.accountId, t.mode),
+  foreignKey({ columns: [t.accountId, t.mode, t.customerId], foreignColumns: [billingCustomers.accountId, billingCustomers.mode, billingCustomers.customerId] }),
+  check('billing_attempts_mode', sql`${t.mode} IN ('test','live')`),
+  check('billing_attempts_checkout_mode', sql`${t.checkoutMode} IN ('payment','subscription')`),
+]);
+export const billingOrders = sqliteTable('billing_orders', {
+  accountId: text('account_id').notNull(),
+  mode: text('mode').notNull(),
+  sessionId: text('session_id').notNull(),
+  userId: text('user_id').notNull().references(() => authUsers.id),
+  offerKey: text('offer_key').notNull(),
+  customerId: text('customer_id').notNull(),
+  status: text('status').notNull(),
+  amount: integer('amount'),
+  currency: text('currency'),
+  updatedAt: integer('updated_at').notNull(),
+}, t => [
+  primaryKey({ columns: [t.accountId, t.mode, t.sessionId] }),
+  index('billing_orders_user').on(t.userId, t.accountId, t.mode, t.updatedAt),
+  foreignKey({ columns: [t.accountId, t.mode, t.sessionId], foreignColumns: [billingCheckoutAttempts.accountId, billingCheckoutAttempts.mode, billingCheckoutAttempts.sessionId] }),
+  check('billing_orders_mode', sql`${t.mode} IN ('test','live')`),
+  check('billing_orders_status', sql`${t.status} IN ('paid','pending','failed','expired')`),
+]);
+export const billingSubscriptions = sqliteTable('billing_subscriptions', {
+  accountId: text('account_id').notNull(),
+  mode: text('mode').notNull(),
+  subscriptionId: text('subscription_id').notNull(),
+  userId: text('user_id').notNull().references(() => authUsers.id),
+  offerKey: text('offer_key').notNull(),
+  customerId: text('customer_id').notNull(),
+  status: text('status').notNull(),
+  cancelAtPeriodEnd: integer('cancel_at_period_end').notNull().default(0),
+  updatedAt: integer('updated_at').notNull(),
+}, t => [
+  primaryKey({ columns: [t.accountId, t.mode, t.subscriptionId] }),
+  index('billing_subscriptions_user').on(t.userId, t.accountId, t.mode, t.updatedAt),
+  foreignKey({ columns: [t.accountId, t.mode, t.customerId], foreignColumns: [billingCustomers.accountId, billingCustomers.mode, billingCustomers.customerId] }),
+  check('billing_subscriptions_mode', sql`${t.mode} IN ('test','live')`),
+]);
+export const billingEvents = sqliteTable('billing_events', {
+  accountId: text('account_id').notNull(),
+  mode: text('mode').notNull(),
+  eventId: text('event_id').notNull(),
+  eventType: text('event_type').notNull(),
+  processedAt: integer('processed_at').notNull(),
+}, t => [
+  primaryKey({ columns: [t.accountId, t.mode, t.eventId] }),
+  check('billing_events_mode', sql`${t.mode} IN ('test','live')`),
+]);
+export const billingVersions = sqliteTable('billing_versions', {
+  accountId: text('account_id').notNull(),
+  mode: text('mode').notNull(),
+  version: integer('version').notNull().default(0),
+}, t => [
+  primaryKey({ columns: [t.accountId, t.mode] }),
+  check('billing_versions_nonnegative', sql`${t.version} >= 0`),
+  check('billing_versions_mode', sql`${t.mode} IN ('test','live')`),
+]);
