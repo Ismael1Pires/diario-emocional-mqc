@@ -13,6 +13,8 @@ import {
   type BillingEnv,
 } from '../app/api/billing/core';
 
+import { getDiaryAccess, requirePaidDiaryUser } from '../app/api/billing/diary-access';
+
 const ACCOUNT = 'acct_fixtureOne';
 const SECRET = 'whsec_fixtureOnlyNoNetwork';
 const PRICES = { consulta: 'price_fixtureOne', acompanhamento: 'price_fixtureMonthly' };
@@ -26,6 +28,7 @@ beforeEach(() => {
     STRIPE_ACCOUNT_ID: ACCOUNT,
     STRIPE_MODE: 'test',
     STRIPE_OFFERS_JSON: JSON.stringify(PRICES),
+    STRIPE_DIARY_OFFER_KEY: 'consulta',
   };
 });
 
@@ -66,6 +69,7 @@ type Session = {
   livemode: boolean; mode: string; url: string | null;
   metadata: Record<string, string>; status: string; payment_status: string;
   amount_total: number; currency: string; subscription: string | null;
+  payment_intent: string; price_id: string;
 };
 type Subscription = {
   id: string; customer: string; livemode: boolean; status: string;
@@ -77,12 +81,12 @@ function fakeStripe() {
   const verifier = new Stripe('sk_test_fixtureOnlyNoNetwork');
   const prices = new Map<string, Record<string, unknown>>([
     [PRICES.consulta, {
-      id: PRICES.consulta, active: true, livemode: false, billing_scheme: 'per_unit',
+      id: PRICES.consulta, type: 'one_time', active: true, livemode: false, billing_scheme: 'per_unit',
       unit_amount: 16700, currency: 'brl', recurring: null,
       product: { id: 'prod_fixtureOne', active: true, livemode: false, name: 'Consulta de avaliação', description: '' },
     }],
     [PRICES.acompanhamento, {
-      id: PRICES.acompanhamento, active: true, livemode: false, billing_scheme: 'per_unit',
+      id: PRICES.acompanhamento, type: 'recurring', active: true, livemode: false, billing_scheme: 'per_unit',
       unit_amount: 4700, currency: 'brl',
       recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed' },
       product: { id: 'prod_fixtureMonthly', active: true, livemode: false, name: 'Acompanhamento', description: '' },
@@ -92,11 +96,15 @@ function fakeStripe() {
   const sessionKeys = new Map<string, Session>();
   const sessions = new Map<string, Session>();
   const subscriptions = new Map<string, Subscription>();
+  const intents = new Map<string, Record<string, unknown>>();
+  const charges = new Map<string, Record<string, unknown>>();
+  const disputes = new Map<string, Record<string, unknown>[]>();
   const calls = { accounts: 0, prices: [] as string[], customers: [] as Call[], checkout: [] as Call[], retrieve: [] as string[], portal: [] as Call[], subscriptions: [] as string[] };
   const behavior = {
     account: ACCOUNT,
     customerFailures: 0,
     checkoutFailures: 0,
+    intentFailures: 0,
     retrieve: undefined as undefined | ((id: string, value: Session) => Promise<Session>),
   };
   const sdk = {
@@ -133,12 +141,25 @@ function fakeStripe() {
             metadata: params.metadata as Record<string, string>,
             status: 'open', payment_status: 'unpaid', amount_total: price.unit_amount as number,
             currency: 'brl', subscription: null,
+            price_id: item.price, payment_intent: `pi_fixture${sessions.size + 1}`,
           };
+          const chargeId = `ch_fixture${sessions.size + 1}`;
+          charges.set(chargeId, { id: chargeId, customer: value.customer, payment_intent: value.payment_intent, livemode: false,
+            currency: 'brl', amount: value.amount_total, amount_captured: value.amount_total, amount_refunded: 0, refunded: false,
+            disputed: false, paid: true, captured: true });
+          intents.set(value.payment_intent, { id: value.payment_intent, customer: value.customer, livemode: false,
+            currency: 'brl', amount: value.amount_total, metadata: value.metadata, status: 'succeeded', latest_charge: chargeId });
+          disputes.set(chargeId, []);
           sessionKeys.set(key, value);
           sessions.set(value.id, value);
         }
         if (behavior.checkoutFailures-- > 0) throw new Error('Network response lost');
         return sessionKeys.get(key)!;
+      },
+      async listLineItems(sessionId: string) {
+        const session = sessions.get(sessionId)!;
+        const price = prices.get(session.price_id)!;
+        return { has_more: false, data: [{ price: { id: session.price_id }, quantity: 1, currency: session.currency, amount_subtotal: price.unit_amount }] };
       },
       async retrieve(id: string) {
         calls.retrieve.push(id);
@@ -157,9 +178,16 @@ function fakeStripe() {
       assert.ok(value, `Unexpected subscription: ${id}`);
       return structuredClone(value);
     } },
+    paymentIntents: { async retrieve(intentId: string) {
+      if (behavior.intentFailures-- > 0) throw new Error('Stripe temporarily unavailable');
+      assert.ok(intents.has(intentId));
+      return structuredClone(intents.get(intentId));
+    } },
+    charges: { async retrieve(chargeId: string) { assert.ok(charges.has(chargeId)); return structuredClone(charges.get(chargeId)); } },
+    disputes: { async list(params: { charge: string }) { return { has_more: false, data: structuredClone(disputes.get(params.charge) ?? []) }; } },
     webhooks: verifier.webhooks,
   } as unknown as Stripe;
-  return { sdk, verifier, prices, customers, sessions, subscriptions, calls, behavior };
+  return { sdk, verifier, prices, customers, sessions, subscriptions, intents, charges, disputes, calls, behavior };
 }
 type Fake = ReturnType<typeof fakeStripe>;
 function event(type: string, object: Record<string, unknown>, extra: Record<string, unknown> = {}) {
@@ -350,6 +378,18 @@ void test('inactive, wrong-mode and unsupported prices cannot start Checkout', a
   }
 });
 
+void test('the diary cannot charge a recurring price when configured as a one-time purchase', async () => {
+  const fake = fakeStripe();
+  const person = await user();
+  Object.assign(fake.prices.get(PRICES.consulta)!, {
+    type: 'recurring', recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed' },
+  });
+  await rejects(() => createCheckout(checkoutRequest(person), billingEnv, fake.sdk), 503);
+  assert.equal(fake.calls.customers.length, 0);
+  assert.equal(fake.calls.checkout.length, 0);
+  await rejects(() => getCatalog(billingEnv, fake.sdk), 503);
+});
+
 void test('portal and billing history are isolated by authenticated user, account and mode', async () => {
   const fake = fakeStripe();
   const a = await user();
@@ -520,4 +560,115 @@ void test('subscription lifecycle is associated through owned Checkout and alway
   const other = await json(await getStatus(request('/api/billing/status', b, undefined, {}, 'GET'), billingEnv));
   assert.deepEqual(other.subscriptions, []);
   assert.deepEqual(other.orders, []);
+});
+
+const diaryScope = () => billingConfig(billingEnv);
+const access = (fake: Fake, person: User) => getDiaryAccess(request('/api/billing/access', person, undefined, {}, 'GET'), billingEnv, fake.sdk, diaryScope());
+void test('paid diary cannot be unlocked by login, redirect, browser visitor ID, pending or failed payment', async () => {
+  const fake = fakeStripe();
+  const person = await user();
+  const reading = request('/api/entries?checkout=retorno', person, undefined, { 'x-visitor-id': 'any-id' }, 'GET');
+  await rejects(() => requirePaidDiaryUser(reading, billingEnv, fake.sdk, diaryScope()), 402);
+  assert.deepEqual(await json(await access(fake, person)), { allowed: false, testMode: true, reason: 'payment_required' });
+  const session = await checkout(fake, person);
+  await handleWebhook(signed(fake, event('checkout.session.completed', { id: session.id })), billingEnv, fake.sdk);
+  assert.equal((await json(await access(fake, person))).allowed, false);
+  await handleWebhook(signed(fake, event('checkout.session.async_payment_failed', { id: session.id })), billingEnv, fake.sdk);
+  assert.equal((await json(await access(fake, person))).allowed, false);
+  assert.equal(sqlite.prepare('SELECT status FROM billing_diary_grants').get()!.status, 'unpaid');
+});
+void test('owned signed payment grants diary access, remains isolated and prevents another checkout', async () => {
+  const fake = fakeStripe();
+  const person = await user();
+  const other = await user('Bia');
+  const session = await checkout(fake, person);
+  await complete(fake, session);
+  assert.equal((await json(await access(fake, person))).allowed, true);
+  assert.equal((await json(await access(fake, other))).allowed, false);
+  assert.equal((await requirePaidDiaryUser(request('/api/entries', person, undefined, {}, 'GET'), billingEnv, fake.sdk, diaryScope())).id, person.id);
+  await rejects(() => createCheckout(checkoutRequest(person), billingEnv, fake.sdk), 409);
+  assert.equal(fake.sessions.size, 1);
+  for (const different of [
+    { ...billingEnv, STRIPE_ACCOUNT_ID: 'acct_other' },
+    { ...billingEnv, STRIPE_MODE: 'live', STRIPE_SECRET_KEY: 'sk_live_fixtureOnlyNoNetwork' },
+    { ...billingEnv, STRIPE_OFFERS_JSON: JSON.stringify({ ...PRICES, consulta: 'price_otherDiary' }) },
+  ]) {
+    const result = await getDiaryAccess(request('/api/billing/access', person, undefined, {}, 'GET'), different, fake.sdk, billingConfig(different));
+    assert.equal((await json(result)).allowed, false);
+  }
+});
+void test('another offer, wrong price, wrong amount, and a forged webhook cannot grant diary access', async () => {
+  const fake = fakeStripe();
+  const person = await user();
+  const otherOffer = await checkout(fake, person, 'acompanhamento');
+  await complete(fake, otherOffer);
+  assert.equal(count('billing_diary_grants'), 0);
+  const session = await checkout(fake, person);
+  session.status = 'complete'; session.payment_status = 'paid';
+  const value = event('checkout.session.completed', { id: session.id });
+  await rejects(() => handleWebhook(signed(fake, value, { secret: 'whsec_forged' }), billingEnv, fake.sdk), 400);
+  session.amount_total = 1;
+  await rejects(() => handleWebhook(signed(fake, value), billingEnv, fake.sdk), 503);
+  assert.equal(count('billing_diary_grants'), 0);
+  assert.equal(count('billing_orders'), 1, 'Only the other offer has a recorded order');
+  session.amount_total = 16700;
+  session.price_id = PRICES.acompanhamento;
+  await rejects(() => handleWebhook(signed(fake, value), billingEnv, fake.sdk), 503);
+  assert.equal(count('billing_diary_grants'), 0);
+});
+void test('full refunds revoke access and an older Checkout event cannot restore it', async () => {
+  const fake = fakeStripe();
+  const person = await user();
+  const session = await checkout(fake, person);
+  await complete(fake, session);
+  const intent = fake.intents.get(session.payment_intent)!;
+  const charge = fake.charges.get(intent.latest_charge as string)!;
+  charge.amount_refunded = charge.amount;
+  charge.refunded = true;
+  await handleWebhook(signed(fake, event('charge.refunded', { id: charge.id })), billingEnv, fake.sdk);
+  assert.equal(sqlite.prepare('SELECT status FROM billing_diary_grants').get()!.status, 'refunded');
+  await rejects(() => requirePaidDiaryUser(request('/api/entries', person, undefined, {}, 'GET'), billingEnv, fake.sdk, diaryScope()), 402);
+  await handleWebhook(signed(fake, event('checkout.session.completed', { id: session.id }, { created: 1 })), billingEnv, fake.sdk);
+  assert.equal((await json(await access(fake, person))).allowed, false);
+});
+void test('active/lost disputes revoke access; won disputes restore only an already signed purchase', async () => {
+  const fake = fakeStripe();
+  const person = await user();
+  const session = await checkout(fake, person);
+  await complete(fake, session);
+  const chargeId = fake.intents.get(session.payment_intent)!.latest_charge as string;
+  const charge = fake.charges.get(chargeId)!;
+  charge.disputed = true;
+  const dispute = { id: 'dp_fixtureOne', charge: chargeId, livemode: false, status: 'needs_response' };
+  fake.disputes.set(chargeId, [dispute]);
+  await handleWebhook(signed(fake, event('charge.dispute.created', dispute)), billingEnv, fake.sdk);
+  assert.equal((await json(await access(fake, person))).allowed, false);
+  dispute.status = 'lost';
+  await handleWebhook(signed(fake, event('charge.dispute.closed', dispute)), billingEnv, fake.sdk);
+  assert.equal((await json(await access(fake, person))).allowed, false);
+  dispute.status = 'won';
+  await handleWebhook(signed(fake, event('charge.dispute.closed', dispute)), billingEnv, fake.sdk);
+  assert.equal((await json(await access(fake, person))).allowed, true);
+});
+void test('stale entitlements reconcile a missed refund and fail closed during a Stripe outage', async () => {
+  const fake = fakeStripe();
+  const person = await user();
+  const session = await checkout(fake, person);
+  await complete(fake, session);
+  sqlite.prepare('UPDATE billing_diary_grants SET checked_at=0').run();
+  fake.behavior.intentFailures = 1;
+  await assert.rejects(() => requirePaidDiaryUser(request('/api/entries', person, undefined, {}, 'GET'), billingEnv, fake.sdk, diaryScope()), /Stripe temporarily unavailable/);
+  assert.equal(sqlite.prepare('SELECT checked_at FROM billing_diary_grants').get()!.checked_at, 0);
+  const charge = fake.charges.get(fake.intents.get(session.payment_intent)!.latest_charge as string)!;
+  charge.refunded = true;
+  charge.amount_refunded = charge.amount;
+  await rejects(() => requirePaidDiaryUser(request('/api/entries', person, undefined, {}, 'GET'), billingEnv, fake.sdk, diaryScope()), 402);
+  assert.equal(sqlite.prepare('SELECT status FROM billing_diary_grants').get()!.status, 'refunded');
+});
+void test('diary access fails closed without a valid protected offer configuration', async () => {
+  const fake = fakeStripe();
+  const person = await user();
+  for (const change of [{ STRIPE_DIARY_OFFER_KEY: '' }, { STRIPE_OFFERS_JSON: '{}' }, { STRIPE_DIARY_OFFER_KEY: 'missing' }]) {
+    await rejects(() => getDiaryAccess(request('/api/billing/access', person, undefined, {}, 'GET'), { ...billingEnv, ...change }, fake.sdk, diaryScope()), 503);
+  }
 });

@@ -10,5 +10,6 @@ declare namespace Cloudflare {
     STRIPE_ACCOUNT_ID: string;
     STRIPE_MODE: string;
     STRIPE_OFFERS_JSON: string;
+    STRIPE_DIARY_OFFER_KEY: string;
   }
 }

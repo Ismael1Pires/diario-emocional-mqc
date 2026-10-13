@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import { diaryAccessForUser, diaryOffer, diarySessionStatement, diaryEventStatements } from './diary-access';
 import {
   configured,
   HttpError,
@@ -16,6 +17,7 @@ export interface BillingEnv extends AuthEnv {
   STRIPE_ACCOUNT_ID: string;
   STRIPE_MODE: string;
   STRIPE_OFFERS_JSON: string;
+  STRIPE_DIARY_OFFER_KEY: string;
 }
 type Mode = 'test' | 'live';
 type Scope = { account: string; mode: Mode; live: boolean };
@@ -67,6 +69,7 @@ export async function retrieveOffer(env: BillingEnv, stripe: Stripe, key: string
     typeof product === 'string' || product.deleted || !product.active || product.livemode !== scope.live ||
     (price.recurring && price.recurring.usage_type !== 'licensed')
   ) throw unavailable();
+  if (key === diaryOffer(env).key && (price.type !== 'one_time' || price.recurring)) throw unavailable();
   return {
     key,
     name: product.name,
@@ -132,6 +135,8 @@ export async function createCheckout(request: Request, env: BillingEnv, stripe: 
   await verifyStripeAccount(env, stripe);
   const read = () => env.DB.prepare('SELECT * FROM billing_checkout_attempts WHERE account_id=? AND mode=? AND request_id=?')
     .bind(scope.account, scope.mode, requestId).first<Attempt>();
+  if (offerKey === diaryOffer(env).key && (await diaryAccessForUser(env, stripe, scope, user, true)).allowed)
+    throw new HttpError(409, 'Seu acesso ao Diário Emocional já está liberado. Volte ao diário.');
   const previous = await read();
   if (previous && (previous.user_id !== user.id || previous.offer_key !== offerKey)) throw new HttpError(409, 'Tentativa já utilizada. Inicie uma nova tentativa.');
   const offer = await retrieveOffer(env, stripe, offerKey);
@@ -255,6 +260,8 @@ async function eventEffects(env: BillingEnv, stripe: Stripe, scope: Scope, event
       // not replace a recorded failure with pending; a fresh paid state can win.
       'INSERT INTO billing_orders (account_id,mode,session_id,user_id,offer_key,customer_id,status,amount,currency,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id,mode,session_id) DO UPDATE SET status=CASE WHEN billing_orders.status=\'paid\' THEN \'paid\' WHEN billing_orders.status=\'failed\' AND excluded.status=\'pending\' THEN \'failed\' ELSE excluded.status END,amount=excluded.amount,currency=excluded.currency,updated_at=excluded.updated_at',
     ).bind(scope.account, scope.mode, session.id, attempt.user_id, attempt.offer_key, attempt.customer_id, status, session.amount_total, session.currency, seconds()));
+    const diaryGrant = await diarySessionStatement(env, stripe, scope, attempt, session);
+    if (diaryGrant) effects.push(diaryGrant);
     const subscriptionId = objectId(session.subscription);
     if (subscriptionId) {
       const subscription = await stripe.subscriptions.retrieve(subscriptionId);
@@ -277,6 +284,7 @@ async function eventEffects(env: BillingEnv, stripe: Stripe, scope: Scope, event
     const subscription = await stripe.subscriptions.retrieve(known.subscription_id);
     effects.push(subscriptionStatement(env, scope, known, subscription));
   }
+  effects.push(...await diaryEventStatements(env, stripe, scope, event));
   return effects;
 }
 export async function handleWebhook(request: Request, env: BillingEnv, stripe: Stripe) {

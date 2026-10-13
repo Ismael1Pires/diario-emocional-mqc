@@ -3,12 +3,13 @@ import { NextRequest } from 'next/server';
 import { getDb } from '@/db';
 import { emotionalEntries } from '@/db/schema';
 import { validEmotions } from '@/app/emotions';
-import { requireUser, readJson, text, HttpError, json } from '../auth/core';
-import { authEnv, guarded } from '../auth/server';
+import { readJson, text, HttpError, json } from '../auth/core';
+import { requireDiaryUser } from '../billing/server';
+import { guarded } from '../auth/server';
 
 export async function GET(request: NextRequest) {
   return guarded(async () => {
-    const user = await requireUser(request, authEnv());
+    const user = await requireDiaryUser(request);
     try {
       const entries = await getDb()
         .select()
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   return guarded(async () => {
-    const user = await requireUser(request, authEnv());
+    const user = await requireDiaryUser(request);
     const visitorId = user.id;
     try {
       const body = await readJson(request);
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   return guarded(async () => {
-    const user = await requireUser(request, authEnv());
+    const user = await requireDiaryUser(request);
     const id = request.nextUrl.searchParams.get('id');
     if (!id || !/^[a-f0-9-]{36}$/.test(id))
       return json({ error: 'Registro não informado.' }, 400);

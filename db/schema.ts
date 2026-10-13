@@ -232,3 +232,25 @@ export const billingVersions = sqliteTable('billing_versions', {
   check('billing_versions_nonnegative', sql`${t.version} >= 0`),
   check('billing_versions_mode', sql`${t.mode} IN ('test','live')`),
 ]);
+
+export const billingDiaryGrants = sqliteTable('billing_diary_grants', {
+  accountId: text('account_id').notNull(),
+  mode: text('mode').notNull(),
+  sessionId: text('session_id').notNull(),
+  userId: text('user_id').notNull().references(() => authUsers.id),
+  offerKey: text('offer_key').notNull(),
+  priceId: text('price_id').notNull(),
+  customerId: text('customer_id').notNull(),
+  paymentIntentId: text('payment_intent_id'),
+  chargeId: text('charge_id'),
+  status: text('status').notNull(),
+  checkedAt: integer('checked_at').notNull(),
+}, t => [
+  primaryKey({ columns: [t.accountId, t.mode, t.sessionId] }),
+  index('billing_diary_grants_user').on(t.userId, t.accountId, t.mode, t.offerKey, t.priceId),
+  index('billing_diary_grants_charge').on(t.accountId, t.mode, t.chargeId),
+  index('billing_diary_grants_intent').on(t.accountId, t.mode, t.paymentIntentId),
+  foreignKey({ columns: [t.accountId, t.mode, t.sessionId], foreignColumns: [billingOrders.accountId, billingOrders.mode, billingOrders.sessionId] }),
+  check('billing_diary_grants_mode', sql`${t.mode} IN ('test','live')`),
+  check('billing_diary_grants_status', sql`${t.status} IN ('active','unpaid','refunded','disputed')`),
+]);

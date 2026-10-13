@@ -43,6 +43,12 @@ export const env = {
   AUTH_ORIGIN: 'https://diary.test',
   RESEND_API_KEY: '',
   AUTH_EMAIL_FROM: '',
+  STRIPE_SECRET_KEY: 'sk_test_fixtureOnlyNoNetwork',
+  STRIPE_WEBHOOK_SECRET: 'whsec_fixtureOnlyNoNetwork',
+  STRIPE_ACCOUNT_ID: 'acct_securityFixture',
+  STRIPE_MODE: 'test',
+  STRIPE_OFFERS_JSON: JSON.stringify({ 'diario-emocional': 'price_diaryFixture' }),
+  STRIPE_DIARY_OFFER_KEY: 'diario-emocional',
 };
 export function reset() {
   sqlite?.close();

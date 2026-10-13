@@ -1,11 +1,12 @@
 import { env } from 'cloudflare:workers';
 import { NextRequest } from 'next/server';
-import { requireUser, readJson, HttpError, json } from '../auth/core';
-import { authEnv, guarded } from '../auth/server';
+import { readJson, HttpError, json } from '../auth/core';
+import { requireDiaryUser } from '../billing/server';
+import { guarded } from '../auth/server';
 
 export async function GET(request: NextRequest) {
   return guarded(async () => {
-    const user = await requireUser(request, authEnv());
+    const user = await requireDiaryUser(request);
     const visitor = user.id;
     try {
       const result = await env.DB.prepare(
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   return guarded(async () => {
-    const user = await requireUser(request, authEnv());
+    const user = await requireDiaryUser(request);
     const visitor = user.id;
     try {
       const body = await readJson(request);

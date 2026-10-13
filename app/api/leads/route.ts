@@ -1,12 +1,12 @@
 import { NextRequest } from 'next/server';
 import {
-  requireUser,
   readJson,
   text,
   limit,
   HttpError,
   json,
 } from '../auth/core';
+import { requireDiaryUser } from '../billing/server';
 import { authEnv, guarded } from '../auth/server';
 import { getDb } from '@/db';
 import { leads } from '@/db/schema';
@@ -15,7 +15,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(request: NextRequest) {
   return guarded(async () => {
-    const user = await requireUser(request, authEnv());
+    const user = await requireDiaryUser(request);
     await limit(authEnv(), 'lead-user', user.id, 3, 86400);
     try {
       const body = await readJson(request);
