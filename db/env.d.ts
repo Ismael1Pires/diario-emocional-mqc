@@ -5,5 +5,11 @@ declare namespace Cloudflare {
     AUTH_SECRET: string;
     AUTH_EMAIL_FROM: string;
     RESEND_API_KEY: string;
+    STRIPE_SECRET_KEY: string;
+    STRIPE_WEBHOOK_SECRET: string;
+    STRIPE_ACCOUNT_ID: string;
+    STRIPE_MODE: string;
+    STRIPE_OFFERS_JSON: string;
+    STRIPE_DIARY_OFFER_KEY: string;
   }
 }

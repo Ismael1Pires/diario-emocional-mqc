@@ -1,0 +1,12 @@
+.diary-access-card { gap: 18px; }
+.diary-access-benefits { list-style: none; display: grid; gap: 12px; padding: 0; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.diary-access-benefits li { display: flex; align-items: flex-start; gap: 9px; }
+.diary-access-benefits svg { flex: 0 0 auto; color: var(--wine); }
+.diary-access-price { display: grid; gap: 4px; padding: 18px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.diary-access-price strong { font: 600 36px/1.1 var(--font-serif); color: var(--wine); }
+.diary-access-price small { font: 400 13px/1.5 var(--font-sans); }
+.diary-access-price span { color: var(--muted); font-size: 12px; }
+.diary-access-link { text-decoration: none; }
+.diary-access-notice { display: block; padding: 12px; border-radius: 11px; color: var(--wine); background: var(--rose-soft); font-size: 11px; line-height: 1.55; }
+.diary-access-email { text-align: center; overflow-wrap: anywhere; }
+.diary-access-logout { justify-self: center; border: 0; padding: 4px; background: transparent; color: var(--muted); font-size: 12px; text-decoration: underline; }

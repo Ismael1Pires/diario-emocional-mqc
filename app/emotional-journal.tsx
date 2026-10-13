@@ -26,6 +26,7 @@ import Reflections from './reflections';
 import MarketingSignup from './marketing-signup';
 import AuthGate, { type User } from './auth-gate';
 import { apiFetch } from './client-api';
+import DiaryAccessGate from './diary-access-gate';
 import { disconnectionDetails, emotionGroup, emotionLabel, emotionMeta, validEmotions } from './emotions';
 
 type View = 'home' | 'new' | 'history' | 'patterns' | 'reminders' | 'reflections';
@@ -140,7 +141,7 @@ function escapeHtml(value: unknown) {
 }
 
 export default function EmotionalJournal() {
-  return <AuthGate>{(user, logout) => <Journal key={user.id} user={user} logout={logout} />}</AuthGate>;
+  return <AuthGate>{(user, logout) => <DiaryAccessGate key={user.id} user={user} logout={logout}><Journal user={user} logout={logout} /></DiaryAccessGate>}</AuthGate>;
 }
 
 function Journal({ user, logout }: { user: User; logout: () => Promise<void> }) {
@@ -646,7 +647,7 @@ function Journal({ user, logout }: { user: User; logout: () => Promise<void> }) 
               <div className="reminder-hero-icon"><Bell size={30} /></div>
               <div className="eyebrow">Cuidado que cabe na rotina</div>
               <h2>Três pausas curtas valem mais que esperar o dia perfeito.</h2>
-              <p>Escolhemos a solução mais simples e sem mensalidade: alertas neste navegador e lembretes recorrentes na agenda do celular.</p>
+              <p>Organize suas pausas com alertas neste navegador e lembretes recorrentes na agenda do celular.</p>
               <div className="how-list"><div><span>1</span><p><strong>Escolha seus horários</strong>Manhã, tarde e noite — ou o ritmo que fizer sentido.</p></div><div><span>2</span><p><strong>Ative neste dispositivo</strong>O navegador avisa quando a ferramenta estiver aberta.</p></div><div><span>3</span><p><strong>Leve para o celular</strong>A agenda envia os alertas mesmo com a página fechada.</p></div></div>
             </article>
             <form className="surface reminder-form" onSubmit={saveReminderSettings}>
@@ -681,4 +682,5 @@ function Journal({ user, logout }: { user: User; logout: () => Promise<void> }) 
     </div>
   );
 }
+
 

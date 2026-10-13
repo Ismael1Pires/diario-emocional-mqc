@@ -2,12 +2,13 @@ import { eq } from 'drizzle-orm';
 import { NextRequest } from 'next/server';
 import { getDb } from '@/db';
 import { reminderSettings } from '@/db/schema';
-import { requireUser, readJson, text, HttpError, json } from '../auth/core';
-import { authEnv, guarded } from '../auth/server';
+import { readJson, text, HttpError, json } from '../auth/core';
+import { requireDiaryUser } from '../billing/server';
+import { guarded } from '../auth/server';
 
 export async function GET(request: NextRequest) {
   return guarded(async () => {
-    const user = await requireUser(request, authEnv());
+    const user = await requireDiaryUser(request);
     try {
       const [settings] = await getDb()
         .select()
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   return guarded(async () => {
-    const user = await requireUser(request, authEnv());
+    const user = await requireDiaryUser(request);
     const visitorId = user.id;
     try {
       const body = await readJson(request);
