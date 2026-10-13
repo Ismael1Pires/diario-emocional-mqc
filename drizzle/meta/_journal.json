@@ -22,6 +22,27 @@
       "when": 1789497165841,
       "tag": "0002_brainy_captain_flint",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791461863490,
+      "tag": "0003_secure_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791833274828,
+      "tag": "0004_stripe_billing",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1791840600000,
+      "tag": "0005_paid_diary",
+      "breakpoints": true
     }
   ]
 }

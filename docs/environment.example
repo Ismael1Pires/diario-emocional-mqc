@@ -1,0 +1,14 @@
+# Inserir valores no runtime, via secrets ou .dev.vars ignorado. Nunca NEXT_PUBLIC_.
+# Não copie placeholders de secrets para produção.
+AUTH_ORIGIN=https://diario.jenifferpires.life
+AUTH_SECRET=REPLACE_WITH_RANDOM_SECRET_OF_AT_LEAST_32_BYTES
+AUTH_EMAIL_FROM=Diario Emocional <acesso@VERIFIED_DOMAIN>
+RESEND_API_KEY=REPLACE_WITH_RESTRICTED_SENDING_KEY
+
+# Exemplo APENAS de teste. Produção exige conta, Price, chave e webhook LIVE.
+STRIPE_MODE=test
+STRIPE_ACCOUNT_ID=acct_1UPoTeJrMgiYpeV3
+STRIPE_DIARY_OFFER_KEY=diario-emocional
+STRIPE_OFFERS_JSON={"diario-emocional":"price_1UPp5LJrMgiYpeV3zHYmbWH7"}
+STRIPE_SECRET_KEY=REPLACE_WITH_SECRET_TEST_KEY
+STRIPE_WEBHOOK_SECRET=REPLACE_WITH_ENDPOINT_SIGNING_SECRET

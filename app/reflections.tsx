@@ -2,13 +2,14 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { BookHeart, Download } from 'lucide-react';
+import { apiFetch } from './client-api';
 
 const themes = ['Reflexão livre', 'Celebrações e conquistas', 'Superações', 'Dificuldades', 'Padrões que se repetem'];
 type Memory = { id: string; createdAt: number; title: string; category: string; content: string };
 const date = (value: number) => new Date(value * 1000).toLocaleString('pt-BR');
 const escape = (text: string) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 
-export default function Reflections({ visitorId }: { visitorId: string }) {
+export default function Reflections() {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -25,19 +26,19 @@ export default function Reflections({ visitorId }: { visitorId: string }) {
     const controller = new AbortController();
     setLoading(true);
     setError('');
-    fetch('/api/reflections', { headers: { 'X-Visitor-ID': visitorId }, signal: controller.signal })
+    apiFetch('/api/reflections', { signal: controller.signal })
       .then(async (response) => { const data = await response.json() as { reflections?: Memory[]; error?: string }; if (!response.ok || !data.reflections) throw new Error(data.error || 'Não foi possível carregar suas memórias.'); setMemories(data.reflections); })
       .catch((reason) => { if (!controller.signal.aborted) setError(reason.message || 'Não foi possível carregar suas memórias.'); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [visitorId, retry]);
+  }, [retry]);
 
   async function save(event: FormEvent) {
     event.preventDefault();
     if (saving) return;
     setSaving(true); setNotice('');
     try {
-      const response = await fetch('/api/reflections', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Visitor-ID': visitorId }, body: JSON.stringify({ title, category, content }) });
+      const response = await apiFetch('/api/reflections', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, category, content }) });
       const data = await response.json() as { reflection?: Memory; error?: string };
       const saved = data.reflection;
       if (!response.ok || !saved) throw new Error(data.error || 'Não foi possível salvar. Tente novamente.');
@@ -80,3 +81,4 @@ export default function Reflections({ visitorId }: { visitorId: string }) {
     {loading ? <p role="status">Carregando suas memórias…</p> : error ? <p role="alert">{error} <button className="outline-btn" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button></p> : !visible.length ? <p>{memories.length ? 'Nenhuma memória corresponde à busca.' : 'Sua primeira memória começa no espaço acima. Aos poucos, este será um lugar para reconhecer tudo o que você viveu e superou.'}</p> : <div className="timeline">{visible.map((memory) => <article className="surface reflection-memory" key={memory.id}><small>{date(memory.createdAt)} · {memory.category}</small><h3>{memory.title || memory.category}</h3><p>{memory.content}</p></article>)}</div>}
   </section>;
 }
+
