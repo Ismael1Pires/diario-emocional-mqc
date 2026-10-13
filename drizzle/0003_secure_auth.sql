@@ -54,12 +54,12 @@ CREATE UNIQUE INDEX `settings_user` ON `reminder_settings` (`user_id`);
 --> statement-breakpoint
 -- Only an authenticated database operator can insert approvals. There is no HTTP claim endpoint.
 CREATE TRIGGER legacy_migration_validate BEFORE INSERT ON legacy_migration_audit BEGIN
-  SELECT CASE WHEN length(trim(NEW.evidence_reference)) < 8 OR length(trim(NEW.approved_by)) < 3 THEN RAISE(ABORT, 'Independent evidence and approver required') END;
-  SELECT CASE WHEN NOT (
+  SELECT (CASE WHEN length(trim(NEW.evidence_reference)) < 8 OR length(trim(NEW.approved_by)) < 3 THEN RAISE(ABORT, 'Independent evidence and approver required') END);
+  SELECT (CASE WHEN NOT (
     (NEW.resource_type = 'entries' AND EXISTS(SELECT 1 FROM emotional_entries WHERE id = NEW.resource_id AND user_id IS NULL)) OR
     (NEW.resource_type = 'reflections' AND EXISTS(SELECT 1 FROM reflections WHERE id = NEW.resource_id AND user_id IS NULL)) OR
     (NEW.resource_type = 'settings' AND EXISTS(SELECT 1 FROM reminder_settings WHERE id = NEW.resource_id AND user_id IS NULL))
-  ) THEN RAISE(ABORT, 'Resource absent or already owned') END;
+  ) THEN RAISE(ABORT, 'Resource absent or already owned') END);
 END;
 --> statement-breakpoint
 CREATE TRIGGER legacy_migration_assign AFTER INSERT ON legacy_migration_audit BEGIN
