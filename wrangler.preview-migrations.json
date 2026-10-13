@@ -1,0 +1,11 @@
+{
+  "name": "diario-emocional-mqc-preview-migrations",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "diario-emocional-mqc-preview",
+      "database_id": "dbbf4141-9657-437a-a76f-def866743a7a",
+      "migrations_dir": "drizzle"
+    }
+  ]
+}
