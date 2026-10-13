@@ -23,5 +23,13 @@
         "migrations_dir": "drizzle"
       }
     ]
-  }
+  },
+  "routes": [
+    {
+      "pattern": "diario.jenifferpires.life/*",
+      "zone_name": "jenifferpires.life"
+    }
+  ],
+  "workers_dev": false,
+  "preview_urls": false
 }
