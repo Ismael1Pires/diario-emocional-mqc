@@ -102,13 +102,14 @@ function fakeStripe() {
   const calls = { accounts: 0, prices: [] as string[], customers: [] as Call[], checkout: [] as Call[], retrieve: [] as string[], portal: [] as Call[], subscriptions: [] as string[] };
   const behavior = {
     account: ACCOUNT,
+    chargesEnabled: true,
     customerFailures: 0,
     checkoutFailures: 0,
     intentFailures: 0,
     retrieve: undefined as undefined | ((id: string, value: Session) => Promise<Session>),
   };
   const sdk = {
-    accounts: { async retrieve() { calls.accounts++; return { id: behavior.account }; } },
+    accounts: { async retrieve() { calls.accounts++; return { id: behavior.account, charges_enabled: behavior.chargesEnabled }; } },
     prices: { async retrieve(id: string) {
       calls.prices.push(id);
       const price = prices.get(id);
@@ -671,4 +672,18 @@ void test('diary access fails closed without a valid protected offer configurati
   for (const change of [{ STRIPE_DIARY_OFFER_KEY: '' }, { STRIPE_OFFERS_JSON: '{}' }, { STRIPE_DIARY_OFFER_KEY: 'missing' }]) {
     await rejects(() => getDiaryAccess(request('/api/billing/access', person, undefined, {}, 'GET'), { ...billingEnv, ...change }, fake.sdk, diaryScope()), 503);
   }
+});
+
+
+test('live checkout is blocked before customer creation while Stripe charges are disabled', async () => {
+  const person = await user();
+  const fixture = fakeStripe();
+  fixture.behavior.chargesEnabled = false;
+  const liveEnv = { ...billingEnv, STRIPE_MODE: 'live', STRIPE_SECRET_KEY: 'sk_live_fixtureOnlyNoNetwork' };
+  await assert.rejects(() => createCheckout(checkoutRequest(person), liveEnv, fixture.sdk),
+    (error: unknown) => error instanceof HttpError && error.status === 503 && error.message.includes('fase de ativação'));
+  assert.equal(fixture.calls.customers.length, 0);
+  assert.equal(fixture.calls.checkout.length, 0);
+  assert.equal(count('billing_checkout_attempts'), 0);
+  assert.equal(count('billing_customers'), 0);
 });

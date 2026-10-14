@@ -39,10 +39,12 @@ export function billingConfig(env: BillingEnv): Scope {
   ) throw unavailable();
   return { account: env.STRIPE_ACCOUNT_ID, mode: env.STRIPE_MODE as Mode, live: env.STRIPE_MODE === 'live' };
 }
-export async function verifyStripeAccount(env: BillingEnv, stripe: Stripe) {
+export async function verifyStripeAccount(env: BillingEnv, stripe: Stripe, requireCharges = false) {
   const scope = billingConfig(env);
   const account = await stripe.accounts.retrieve(null);
   if (account.id !== scope.account) throw unavailable();
+  if (requireCharges && scope.live && account.charges_enabled !== true)
+    throw new HttpError(503, 'Os pagamentos ainda estão em fase de ativação. Aguarde a liberação para realizar sua compra.');
   return scope;
 }
 function offers(env: BillingEnv): Record<string, string> {
@@ -132,7 +134,7 @@ export async function createCheckout(request: Request, env: BillingEnv, stripe: 
   const offerKey = text(body.offerKey, 64);
   const requestId = text(body.requestId, 36).toLowerCase();
   if (!UUID.test(requestId)) throw new HttpError(400, 'Identificador da tentativa inválido.');
-  await verifyStripeAccount(env, stripe);
+  await verifyStripeAccount(env, stripe, true);
   const read = () => env.DB.prepare('SELECT * FROM billing_checkout_attempts WHERE account_id=? AND mode=? AND request_id=?')
     .bind(scope.account, scope.mode, requestId).first<Attempt>();
   if (offerKey === diaryOffer(env).key && (await diaryAccessForUser(env, stripe, scope, user, true)).allowed)
