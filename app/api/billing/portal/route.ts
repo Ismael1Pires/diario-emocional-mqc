@@ -1,4 +1,2 @@
-import { guarded } from '../../auth/server';
-import { createPortal } from '../core';
-import { billingEnv, stripeClient } from '../server';
-export const POST = (request: Request) => guarded(() => createPortal(request, billingEnv(), stripeClient()));
+import { paymentsDisabled } from '../disabled';
+export const POST = paymentsDisabled;

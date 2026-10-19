@@ -1,4 +1,2 @@
-import { guarded } from '../../auth/server';
-import { getCatalog } from '../core';
-import { billingEnv, stripeClient } from '../server';
-export const GET = () => guarded(() => getCatalog(billingEnv(), stripeClient()));
+import { paymentsDisabled } from '../disabled';
+export const GET = paymentsDisabled;

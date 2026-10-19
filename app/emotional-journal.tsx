@@ -26,7 +26,6 @@ import Reflections from './reflections';
 import MarketingSignup from './marketing-signup';
 import AuthGate, { type User } from './auth-gate';
 import { apiFetch } from './client-api';
-import DiaryAccessGate from './diary-access-gate';
 import { disconnectionDetails, emotionGroup, emotionLabel, emotionMeta, validEmotions } from './emotions';
 
 type View = 'home' | 'new' | 'history' | 'patterns' | 'reminders' | 'reflections';
@@ -141,7 +140,7 @@ function escapeHtml(value: unknown) {
 }
 
 export default function EmotionalJournal() {
-  return <AuthGate>{(user, logout) => <DiaryAccessGate key={user.id} user={user} logout={logout}><Journal user={user} logout={logout} /></DiaryAccessGate>}</AuthGate>;
+  return <AuthGate>{(user, logout) => <Journal key={user.id} user={user} logout={logout} />}</AuthGate>;
 }
 
 function Journal({ user, logout }: { user: User; logout: () => Promise<void> }) {

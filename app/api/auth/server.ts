@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { failure, type AuthEnv } from './core';
+import { failure, requireUser, type AuthEnv } from './core';
 export const authEnv = () => env as unknown as AuthEnv;
+export const requireDiaryUser = (request: Request) => requireUser(request, authEnv());
 export async function guarded(action: () => Promise<Response>) {
   try {
     return await action();

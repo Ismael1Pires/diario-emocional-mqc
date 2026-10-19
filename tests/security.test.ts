@@ -72,7 +72,7 @@ async function challenge(email = 'a@example.com', ip = '1') {
     response,
   };
 }
-async function login(email = 'a@example.com', ip = '1', paid = true) {
+async function login(email = 'a@example.com', ip = '1') {
   const c = await challenge(email, ip);
   const response = await verifyCode(
     req('/api/auth/verify', 'POST', c, c.cookies, { 'cf-connecting-ip': ip }),
@@ -80,25 +80,7 @@ async function login(email = 'a@example.com', ip = '1', paid = true) {
   );
   const cookies = cookieValue(response, SESSION_COOKIE);
   const user = await requireUser(req('/api/auth/session', 'GET', undefined, cookies), env);
-  if (paid) paidFixture(user);
   return { cookies, response, user };
-}
-function paidFixture(user: { id: string; email: string; name: string }) {
-  // These rows are fixtures for existing data-isolation tests. Production grants
-  // are written exclusively by the signed Stripe webhook after ownership checks.
-  if (sqlite.prepare('SELECT user_id FROM billing_customers WHERE user_id=? AND account_id=? AND mode=?').get(user.id, env.STRIPE_ACCOUNT_ID, 'test')) return;
-  const requestId = crypto.randomUUID();
-  const customerId = `cus_fixture${crypto.randomUUID().replaceAll('-', '')}`;
-  const sessionId = `cs_test_fixture${crypto.randomUUID().replaceAll('-', '')}`;
-  const timestamp = Math.floor(Date.now() / 1000);
-  sqlite.prepare('INSERT INTO billing_customers (user_id,account_id,mode,customer_id,creation_id,creation_started_at,email,name) VALUES (?,?,?,?,?,?,?,?)')
-    .run(user.id, env.STRIPE_ACCOUNT_ID, 'test', customerId, requestId, timestamp, user.email, user.name);
-  sqlite.prepare('INSERT INTO billing_checkout_attempts (account_id,mode,request_id,user_id,offer_key,price_id,checkout_mode,customer_id,started_at,return_origin,session_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
-    .run(env.STRIPE_ACCOUNT_ID, 'test', requestId, user.id, 'diario-emocional', 'price_diaryFixture', 'payment', customerId, timestamp, env.AUTH_ORIGIN, sessionId);
-  sqlite.prepare('INSERT INTO billing_orders (account_id,mode,session_id,user_id,offer_key,customer_id,status,amount,currency,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
-    .run(env.STRIPE_ACCOUNT_ID, 'test', sessionId, user.id, 'diario-emocional', customerId, 'paid', 4790, 'brl', timestamp);
-  sqlite.prepare('INSERT INTO billing_diary_grants (account_id,mode,session_id,user_id,offer_key,price_id,customer_id,status,checked_at) VALUES (?,?,?,?,?,?,?,?,?)')
-    .run(env.STRIPE_ACCOUNT_ID, 'test', sessionId, user.id, 'diario-emocional', 'price_diaryFixture', customerId, 'active', timestamp);
 }
 const rejects = (action: () => Promise<unknown>, status: number) =>
   assert.rejects(
@@ -585,21 +567,43 @@ void test('rollout migration preserves every historical field and performs no ow
   db.close();
 });
 
-void test('every private diary endpoint requires a paid authenticated user', async () => {
-  const unpaid = await login('unpaid@example.com', '91', false);
-  for (const response of [
-    await entries.GET(req('/api/entries?checkout=retorno', 'GET', undefined, unpaid.cookies, { 'x-visitor-id': 'paid-owner' })),
-    await entries.POST(req('/api/entries', 'POST', { emotion: 'calma', intensity: 5 }, unpaid.cookies)),
-    await entries.DELETE(req('/api/entries?id=00000000-0000-0000-0000-000000000000', 'DELETE', undefined, unpaid.cookies)),
-    await reflections.GET(req('/api/reflections', 'GET', undefined, unpaid.cookies)),
-    await reflections.POST(req('/api/reflections', 'POST', { title: '', content: 'Private', category: 'Reflexão livre' }, unpaid.cookies)),
-    await settings.GET(req('/api/settings', 'GET', undefined, unpaid.cookies)),
-    await settings.PUT(req('/api/settings', 'PUT', { times: ['20:00'] }, unpaid.cookies)),
-    await leads.POST(req('/api/leads', 'POST', { name: 'Ana', whatsapp: '11999999999', consent: true }, unpaid.cookies)),
-  ]) assert.equal(response.status, 402);
-  assert.equal((await requireUser(req('/api/auth/session', 'GET', undefined, unpaid.cookies), env)).id, unpaid.user.id);
-  assert.equal(sqlite.prepare('SELECT count(*) n FROM emotional_entries').get()!.n, 0);
-  assert.equal(sqlite.prepare('SELECT count(*) n FROM reflections').get()!.n, 0);
-  assert.equal(sqlite.prepare('SELECT count(*) n FROM reminder_settings').get()!.n, 0);
-  assert.equal(sqlite.prepare('SELECT count(*) n FROM leads').get()!.n, 0);
+void test('authenticated users can use every diary endpoint without payment or Stripe configuration', async () => {
+  const a = await login('free@example.com', '91');
+  const previous = { STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET };
+  env.STRIPE_SECRET_KEY = '';
+  env.STRIPE_WEBHOOK_SECRET = '';
+  try {
+    const responses = [
+      await entries.GET(req('/api/entries', 'GET', undefined, a.cookies)),
+      await entries.POST(req('/api/entries', 'POST', { emotion: 'calma', intensity: 5 }, a.cookies)),
+      await entries.DELETE(req('/api/entries?id=00000000-0000-0000-0000-000000000000', 'DELETE', undefined, a.cookies)),
+      await reflections.GET(req('/api/reflections', 'GET', undefined, a.cookies)),
+      await reflections.POST(req('/api/reflections', 'POST', { title: '', content: 'Private', category: 'Reflexão livre' }, a.cookies)),
+      await settings.GET(req('/api/settings', 'GET', undefined, a.cookies)),
+      await settings.PUT(req('/api/settings', 'PUT', { times: ['20:00'] }, a.cookies)),
+      await leads.POST(req('/api/leads', 'POST', { name: 'Ana', whatsapp: '11999999999', consent: true }, a.cookies)),
+    ];
+    assert.deepEqual(responses.map(r => r.status), [200, 201, 200, 200, 201, 200, 200, 201]);
+    for (const table of ['emotional_entries', 'reflections', 'reminder_settings', 'leads'])
+      assert.equal(sqlite.prepare('SELECT count(*) n FROM ' + table).get()!.n, 1);
+    for (const table of ['billing_customers', 'billing_checkout_attempts', 'billing_diary_grants'])
+      assert.equal(sqlite.prepare('SELECT count(*) n FROM ' + table).get()!.n, 0);
+  } finally {
+    Object.assign(env, previous);
+  }
+});
+
+void test('retired payment endpoints cannot create charges and webhook retries do not change data', async () => {
+  const { POST: checkout } = await import('../app/api/billing/checkout/route');
+  const { POST: portal } = await import('../app/api/billing/portal/route');
+  const { GET: catalog } = await import('../app/api/billing/catalog/route');
+  const { GET: status } = await import('../app/api/billing/status/route');
+  const { GET: access } = await import('../app/api/billing/access/route');
+  const { POST: webhook } = await import('../app/api/stripe/webhook/route');
+  for (const handler of [checkout, portal, catalog, status, access])
+    assert.equal(handler().status, 410);
+  const response = webhook();
+  assert.deepEqual(await response.json(), { received: true, ignored: true });
+  for (const table of ['billing_customers', 'billing_checkout_attempts', 'billing_orders', 'billing_diary_grants', 'billing_events'])
+    assert.equal(sqlite.prepare('SELECT count(*) n FROM ' + table).get()!.n, 0);
 });
