@@ -4,8 +4,7 @@ import { getDb } from '@/db';
 import { emotionalEntries } from '@/db/schema';
 import { validEmotions } from '@/app/emotions';
 import { readJson, text, HttpError, json } from '../auth/core';
-import { requireDiaryUser } from '../billing/server';
-import { guarded } from '../auth/server';
+import { guarded, requireDiaryUser } from '../auth/server';
 
 export async function GET(request: NextRequest) {
   return guarded(async () => {

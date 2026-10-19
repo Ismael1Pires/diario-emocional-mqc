@@ -152,7 +152,7 @@ export default function AuthGate({
           <p className="registration-intro">
             {challengeId
               ? `Enviamos um código para ${email}. Ele vale por 10 minutos. Digite-o neste navegador.`
-              : 'Use seu e-mail para criar uma conta ou entrar. O acesso ao Diário Emocional é liberado após a confirmação do pagamento.'}
+              : 'Use seu e-mail para criar uma conta ou entrar. Neste momento, o acesso ao Diário Emocional não exige pagamento.'}
           </p>
           {!challengeId ? (
             <>

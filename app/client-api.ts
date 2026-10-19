@@ -12,8 +12,6 @@ export async function apiFetch(input: string, init: RequestInit = {}) {
   });
   if (response.status === 401 && !input.startsWith('/api/auth/'))
     window.dispatchEvent(new Event('diary-session-expired'));
-  if (response.status === 402 && !input.startsWith('/api/billing/'))
-    window.dispatchEvent(new Event('diary-payment-required'));
   return response;
 }
 

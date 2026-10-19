@@ -6,8 +6,7 @@ import {
   HttpError,
   json,
 } from '../auth/core';
-import { requireDiaryUser } from '../billing/server';
-import { authEnv, guarded } from '../auth/server';
+import { authEnv, guarded, requireDiaryUser } from '../auth/server';
 import { getDb } from '@/db';
 import { leads } from '@/db/schema';
 
