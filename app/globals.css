@@ -109,6 +109,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .gauge span { display: block; height: 100%; background: linear-gradient(90deg, var(--rose), var(--wine)); border-radius: inherit; transition: width .4s ease; }
 .temperature-label { font-size: 13px; }
 .therapist-card { display: grid; grid-template-columns: 180px minmax(0, 1fr) auto; align-items: center; gap: 28px; margin-top: 19px; padding: 18px 24px 18px 18px; overflow: hidden; }
+.kit-offer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 28px; margin-top: 19px; padding: 27px 30px; border: 1px solid #405548; border-radius: 23px; background: #26382e; color: #fffdf9; box-shadow: var(--shadow); }
+.kit-offer-label { display: flex; align-items: center; gap: 8px; color: #dfca9c; font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.kit-offer-copy h2 { margin: 11px 0 9px; font: 500 30px/1.1 var(--font-serif); }
+.kit-offer-copy > p { max-width: 540px; margin: 0; color: #e2e7dc; font-size: 12px; line-height: 1.65; }
+.kit-offer-format { display: block; margin-top: 11px; color: #c2cbbb; font-size: 10px; line-height: 1.6; }
+.kit-offer-action { text-align: center; }
+.kit-offer-price { margin: 0 0 15px; color: #d2d9c9; font-size: 11px; }
+.kit-offer-price strong { display: block; margin-top: 4px; color: #fffdf9; font: 500 36px/1.1 var(--font-serif); }
+.kit-offer-price > span { display: block; margin-top: 4px; font-size: 9px; }
+.kit-offer-button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 13px 18px; border: 1px solid #c6ac75; border-radius: 999px; background: #c6ac75; color: #203228; font-size: 11px; font-weight: 800; line-height: 1.5; text-align: center; text-decoration: none; transition: background .18s ease; }
+.kit-offer-button:hover { background: #ddc696; }
+.kit-offer-button svg { flex-shrink: 0; }
+.kit-offer-button:focus-visible { outline: 2px solid #fffdf9; outline-offset: 4px; }
+@media (max-width: 1100px) { .kit-offer { grid-template-columns: 1fr; gap: 20px; } .kit-offer-action { display: flex; align-items: center; justify-content: space-between; gap: 18px; text-align: left; } .kit-offer-price { margin: 0; flex-shrink: 0; } }
+@media (max-width: 600px) { .kit-offer { padding: 24px 22px; } .kit-offer-copy h2 { font-size: 28px; } .kit-offer-action { flex-direction: column; align-items: stretch; text-align: left; gap: 16px; } .kit-offer-button { width: 100%; } }
 .therapist-photo { width: 180px; height: 240px; border-radius: 21px; object-fit: cover; object-position: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.5), 0 14px 32px rgba(36,51,42,.13); }
 .therapist-copy h2 { margin: 5px 0 6px; font: 600 23px/1.12 var(--font-serif); }
 .therapist-copy p { max-width: 650px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
