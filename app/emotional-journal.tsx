@@ -499,11 +499,11 @@ function Journal({ user, logout }: { user: User; logout: () => Promise<void> }) 
               <div className="kit-offer-copy">
                 <div className="kit-offer-label"><Download size={15} aria-hidden="true" /> Oferta por tempo limitado</div>
                 <h2 id="kit-offer-title">Kit Raízes &amp; Identidade</h2>
-                <p>5 ferramentas para aprofundar reflexões, organizar descobertas e dar continuidade ao cuidado emocional.</p>
+                <p>5 ferramentas práticas para aplicar online ou imprimir.</p>
                 <span className="kit-offer-format">61 páginas · PDFs preenchíveis · digital ou impresso</span>
               </div>
               <div className="kit-offer-action">
-                <p className="kit-offer-price">De <del>R$ 97,90</del> por <strong>R$ 27,90</strong><span>pagamento único</span></p>
+                <p className="kit-offer-price">De <del>R$ 97,90</del> por apenas <strong>R$ 24,90</strong><span>pagamento único</span></p>
                 <a className="kit-offer-button" href="https://jornada.jenifferpires.life/" target="_blank" rel="noopener noreferrer">Conhecer e baixar as 5 ferramentas <ChevronRight size={17} aria-hidden="true" /></a>
               </div>
             </section>
