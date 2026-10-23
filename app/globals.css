@@ -384,19 +384,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .registration-brand-panel { padding: 36px clamp(30px, 4.2vw, 64px) 40px; }
 .registration-message { margin: 0; padding: 30px 0 26px; }
 .registration-message h1 { font-size: clamp(38px, 4.2vw, 58px); }
-.registration-person { flex-direction: column; align-items: flex-start; gap: 18px; width: min(430px, 100%); margin: 0 auto; }
-.registration-person img { width: 100%; height: 470px; border-radius: 24px; object-fit: cover; object-position: center 66%; }
+.registration-person { flex-direction: column; align-items: flex-start; gap: 18px; width: min(400px, 100%); margin: 0 auto; }
+.registration-person img { width: 100%; height: 570px; border-radius: 24px; object-fit: cover; object-position: center 35%; }
 .registration-person div { gap: 7px; }
 .registration-person span { font-size: 10px; }
 @media (max-width: 900px) {
   .registration-shell { grid-template-columns: 1fr; }
   .registration-brand-panel { padding: 30px clamp(24px, 6vw, 60px) 35px; }
   .registration-message { max-width: 620px; padding: 28px 0; }
-  .registration-person { width: min(470px, 100%); }
-  .registration-person img { height: 510px; }
+  .registration-person { width: min(400px, 100%); }
+  .registration-person img { height: 570px; }
 }
 @media (max-width: 640px) {
-  .registration-person img { height: 430px; border-radius: 20px; }
+  .registration-person img { height: 500px; border-radius: 20px; }
   .registration-message h1 { font-size: 42px; }
   .profile-button-label { display: none; }
   .topbar { gap: 12px; align-items: flex-start; }
