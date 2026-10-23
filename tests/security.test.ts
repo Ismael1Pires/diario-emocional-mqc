@@ -18,6 +18,9 @@ import * as entries from '../app/api/entries/route';
 import * as reflections from '../app/api/reflections/route';
 import * as settings from '../app/api/settings/route';
 import * as leads from '../app/api/leads/route';
+import * as profileApi from '../app/api/profile/route';
+import { detailOther } from '../app/entry-options';
+import { readFileSync } from 'node:fs';
 import { saveMemory } from '../app/memory-client';
 import { filterMemories, memoryDay, type Memory } from '../app/memory-utils';
 import type { NextRequest } from 'next/server';
@@ -649,4 +652,50 @@ void test('retired payment endpoints cannot create charges and webhook retries d
   assert.deepEqual(await response.json(), { received: true, ignored: true });
   for (const table of ['billing_customers', 'billing_checkout_attempts', 'billing_orders', 'billing_diary_grants', 'billing_events'])
     assert.equal(sqlite.prepare('SELECT count(*) n FROM ' + table).get()!.n, 0);
+});
+
+void test('profile name and uploaded photo persist only for their authenticated owner', async () => {
+  const a = await login();
+  const b = await login('profile-b@example.com', '2');
+  const avatar = 'data:image/png;base64,' + btoa(String.fromCharCode(...readFileSync('public/brand/diary-icon-32.png')));
+  assert.equal((await profileApi.GET(req('/api/profile'))).status, 401);
+  assert.equal((await profileApi.PUT(req('/api/profile', 'PUT', { name: 'Forged', avatar }, '', { 'x-visitor-id': a.user.id }))).status, 401);
+  assert.equal((await profileApi.PUT(req('/api/profile', 'PUT', { name: 'Cross-site', avatar }, a.cookies, { origin: 'https://evil.test' }))).status, 403);
+  const saved = await profileApi.PUT(req('/api/profile', 'PUT', { name: 'Ana Maria', avatar, userId: b.user.id }, a.cookies));
+  assert.equal(saved.status, 200);
+  const own = await (await profileApi.GET(req('/api/profile', 'GET', undefined, a.cookies))).json() as { profile: {name:string;avatar:string|null} };
+  assert.deepEqual(own.profile, { name: 'Ana Maria', avatar });
+  const other = await (await profileApi.GET(req('/api/profile', 'GET', undefined, b.cookies))).json() as { profile: {name:string;avatar:string|null} };
+  assert.equal(other.profile.avatar, null);
+  assert.equal(other.profile.name, b.user.name);
+  assert.equal((await requireUser(req('/api/auth/session', 'GET', undefined, a.cookies), env)).name, 'Ana Maria');
+  assert.equal((await profileApi.PUT(req('/api/profile', 'PUT', { name: 'Ana', avatar: null }, a.cookies))).status, 200);
+  assert.equal(sqlite.prepare('SELECT avatar FROM user_profiles WHERE user_id=?').get(a.user.id)!.avatar, null);
+});
+void test('profile rejects unsafe image formats and oversized uploads before changing the account', async () => {
+  const a = await login();
+  for (const avatar of ['data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', 'data:image/png;base64,bm90LWFuLWltYWdl', 'data:image/jpeg;base64,' + 'A'.repeat(60000), 'https://example.com/photo.png']) {
+    assert.equal((await profileApi.PUT(req('/api/profile', 'PUT', { name: 'Changed', avatar }, a.cookies))).status, 400);
+  }
+  assert.equal((await profileApi.PUT(req('/api/profile', 'PUT', { name: ' ', avatar: null }, a.cookies))).status, 400);
+  assert.equal((await requireUser(req('/api/auth/session', 'GET', undefined, a.cookies), env)).name, a.user.name);
+});
+void test('profile initialization adds its table without modifying existing diary records', async () => {
+  const a = await login();
+  sqlite.exec('DROP TABLE user_profiles');
+  assert.equal((await profileApi.GET(req('/api/profile', 'GET', undefined, a.cookies))).status, 200);
+  assert.equal((await requireUser(req('/api/auth/session', 'GET', undefined, a.cookies), env)).id, a.user.id);
+});
+void test('custom Other descriptions survive saving and do not replace selected preset options', async () => {
+  const a = await login();
+  const trigger = detailOther('Outro', 'Uma mudança inesperada');
+  const pattern = detailOther('Outro', 'Evitar pedir ajuda');
+  assert.equal(detailOther('Trabalho', 'texto de outra opção'), 'Trabalho');
+  assert.throws(() => detailOther('Outro', '  '));
+  assert.throws(() => detailOther('Outro', 'x'.repeat(111)));
+  const saved = await entries.POST(req('/api/entries', 'POST', { emotion:'calma', intensity:5, trigger, pattern, event:'Observação' }, a.cookies));
+  assert.equal(saved.status, 201);
+  const result = await (await entries.GET(req('/api/entries', 'GET', undefined, a.cookies))).json() as {entries: {trigger:string;pattern:string}[]};
+  assert.equal(result.entries[0].trigger, trigger);
+  assert.equal(result.entries[0].pattern, pattern);
 });

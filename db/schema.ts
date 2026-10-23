@@ -92,6 +92,12 @@ export const authUsers = sqliteTable('auth_users', {
   name: text('name').notNull(),
   createdAt: integer('created_at').notNull(),
 });
+export const userProfiles = sqliteTable('user_profiles', {
+  userId: text('user_id').primaryKey().references(() => authUsers.id),
+  avatar: text('avatar'),
+  updatedAt: integer('updated_at').notNull(),
+});
+
 export const authSessions = sqliteTable(
   'auth_sessions',
   {

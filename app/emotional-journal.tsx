@@ -20,15 +20,19 @@ import {
   Sparkles,
   Trash2,
   TriangleAlert,
+  UserRound,
 } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import Reflections from './reflections';
+import UserProfile from './user-profile';
+import { detailOther } from './entry-options';
+import type { AccountProfile } from './profile-data';
 import MarketingSignup from './marketing-signup';
 import AuthGate, { type User } from './auth-gate';
 import { apiFetch } from './client-api';
 import { disconnectionDetails, emotionGroup, emotionLabel, emotionMeta, validEmotions } from './emotions';
 
-type View = 'home' | 'new' | 'history' | 'patterns' | 'reminders' | 'reflections';
+type View = 'home' | 'new' | 'history' | 'patterns' | 'reminders' | 'reflections' | 'profile';
 
 type Entry = {
   id: string;
@@ -144,12 +148,16 @@ export default function EmotionalJournal() {
 }
 
 function Journal({ user, logout }: { user: User; logout: () => Promise<void> }) {
-  const profile: LeadProfile = { ...user, whatsapp: '' };
+  const [account, setAccount] = useState<User & { avatar: string | null }>({ ...user, avatar: null });
+  const profile: LeadProfile = { ...account, whatsapp: '' };
+  const updateProfile = useCallback((value: AccountProfile) => setAccount((previous) => ({ ...previous, ...value })), []);
   const [view, setView] = useState<View>('home');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState<EntryDraft>(initialDraft);
   const [saving, setSaving] = useState(false);
+  const [otherTrigger, setOtherTrigger] = useState('');
+  const [otherPattern, setOtherPattern] = useState('');
   const draftEmotionGroup = emotionGroup(draft.emotion);
   const [message, setMessage] = useState('');
   const [historyFilter, setHistoryFilter] = useState('todas');
@@ -306,7 +314,8 @@ function Journal({ user, logout }: { user: User; logout: () => Promise<void> }) 
     setSaving(true);
     setMessage('');
     try {
-      await createEntry({ ...draft, occurredAt: new Date() });
+      await createEntry({ ...draft, occurredAt: new Date(), trigger: detailOther(draft.trigger, otherTrigger), pattern: detailOther(draft.pattern, otherPattern) });
+      setOtherTrigger(''); setOtherPattern('');
       setDraft({ ...initialDraft, occurredAt: new Date() });
       setMessage('Seu registro foi guardado com carinho.');
       setView('home');
@@ -457,6 +466,7 @@ function Journal({ user, logout }: { user: User; logout: () => Promise<void> }) 
               <Icon size={18} /> {label}
             </button>
           ))}
+          <button className={`nav-item ${view === 'profile' ? 'active' : ''}`} onClick={() => navigate('profile')}><UserRound size={18} /> Seu perfil</button>
         </nav>
         <button className="outline-btn" onClick={() => void logout()}>Sair da conta</button>
         <div className="privacy-note"><LockKeyhole size={14} /><span>Seu espaço privado de auto-observação.</span></div>
@@ -465,17 +475,21 @@ function Journal({ user, logout }: { user: User; logout: () => Promise<void> }) 
 
       <main className="main">
         <header className="topbar">
-          <div><div className="eyebrow">Seu espaço de acolhimento</div><h1 className="welcome">{view === 'new' ? 'Vamos dar nome ao que aconteceu.' : view === 'history' ? 'Sua história emocional, com gentileza.' : view === 'patterns' ? 'O que se repete também pode mudar.' : view === 'reminders' ? 'Crie pequenas pausas no seu dia.' : 'Como está seu mundo aí dentro?'}</h1></div>
+          <div><div className="eyebrow">Seu espaço de acolhimento</div><h1 className="welcome">{view === 'profile' ? 'Um espaço com a sua identidade.' : view === 'new' ? 'Vamos dar nome ao que aconteceu.' : view === 'history' ? 'Sua história emocional, com gentileza.' : view === 'patterns' ? 'O que se repete também pode mudar.' : view === 'reminders' ? 'Crie pequenas pausas no seu dia.' : 'Como está seu mundo aí dentro?'}</h1></div>
           <div className="topbar-actions">
             <button className="outline-btn compact-btn" onClick={() => void logout()}>Sair</button>
             <a className="contact-btn compact-btn" href={CONTACT_URL} target="_blank" rel="noreferrer"><MessageCircle size={16} /> Falar com Jeniffer</a>
-            <img className="avatar-photo" src="/brand/jeniffer-pires.jpeg" alt="Jeniffer Pires" />
+            <button className="profile-button" onClick={() => navigate('profile')} aria-label="Abrir seu perfil" title="Seu perfil" aria-current={view === 'profile' ? 'page' : undefined}>
+              {account.avatar ? <img className="profile-avatar" src={account.avatar} alt="Sua foto de perfil" /> : <span className="profile-avatar profile-initials" aria-hidden="true">{account.name.trim().slice(0, 1).toLocaleUpperCase('pt-BR') || <UserRound size={22} />}</span>}
+              <span className="profile-button-label">Seu perfil</span>
+            </button>
           </div>
         </header>
 
         {message && <div className="toast-message" role="status"><Check size={17} />{message}<button onClick={() => setMessage('')} aria-label="Fechar aviso">×</button></div>}
 
         <div hidden={view !== 'reflections'}><Reflections /></div>
+        <div hidden={view !== 'profile'}><UserProfile initialName={user.name} onChange={updateProfile} /></div>
 
         {view === 'home' && (
           <>
@@ -583,7 +597,9 @@ function Journal({ user, logout }: { user: User; logout: () => Promise<void> }) 
               <div className="step-label"><span>2</span> Vamos desenhar o que aconteceu</div>
               <div className="field-grid">
                 <label className="field"><span>O que aconteceu?</span><textarea required rows={4} value={draft.event} onChange={(event) => setDraft({ ...draft, event: event.target.value })} placeholder={draftEmotionGroup === 'desconexão' ? 'Quando percebeu essa desconexão? De quem, do quê ou de si você se sentiu distante?' : 'Conte a cena com suas palavras, sem precisar organizar tudo…'} /></label>
-                <label className="field"><span>Qual foi o gatilho principal?</span><select required value={draft.trigger} onChange={(event) => setDraft({ ...draft, trigger: event.target.value })}><option value="">Selecione</option>{triggers.map((trigger) => <option key={trigger}>{trigger}</option>)}</select></label>
+                <div className="other-option-field"><label className="field"><span>Qual foi o gatilho principal?</span><select required value={draft.trigger} onChange={(event) => setDraft({ ...draft, trigger: event.target.value })}><option value="">Selecione</option>{triggers.map((trigger) => <option key={trigger}>{trigger}</option>)}</select></label>
+                  {draft.trigger === 'Outro' && <label className="field other-detail"><span>Qual outro gatilho?</span><input required maxLength={110} value={otherTrigger} onChange={(event) => setOtherTrigger(event.target.value)} placeholder="Descreva o que despertou essa emoção" /></label>}
+                </div>
                 <label className="field"><span>Que pensamento veio na hora?</span><textarea rows={3} value={draft.thought} onChange={(event) => setDraft({ ...draft, thought: event.target.value })} placeholder={draftEmotionGroup === 'desconexão' ? 'Que pensamentos vieram? Também pode contar se foi difícil perceber algum.' : 'Ex.: eu não vou dar conta, ninguém me escuta…'} /></label>
                 <label className="field"><span>Onde isso apareceu no corpo?</span><input value={draft.bodySensation} onChange={(event) => setDraft({ ...draft, bodySensation: event.target.value })} placeholder={draftEmotionGroup === 'desconexão' ? 'Como estava seu corpo? Foi possível notar alguma sensação?' : 'Peito apertado, calor, nó na garganta…'} /></label>
                 <label className="field"><span>Como você reagiu?</span><textarea rows={3} value={draft.reaction} onChange={(event) => setDraft({ ...draft, reaction: event.target.value })} placeholder={draftEmotionGroup === 'desconexão' ? 'Você se afastou, ficou no automático ou percebeu outra reação?' : 'O que você fez, disse ou evitou?'} /></label>
@@ -593,7 +609,9 @@ function Journal({ user, logout }: { user: User; logout: () => Promise<void> }) 
             <section className="surface form-section">
               <div className="step-label"><span>3</span> Transforme a cena em compreensão</div>
               <div className="field-grid two">
-                <label className="field"><span>Que padrão você reconhece?</span><select value={draft.pattern} onChange={(event) => setDraft({ ...draft, pattern: event.target.value })}><option value="">Ainda não sei</option>{patterns.map((pattern) => <option key={pattern}>{pattern}</option>)}</select></label>
+                <div className="other-option-field"><label className="field"><span>Que padrão você reconhece?</span><select value={draft.pattern} onChange={(event) => setDraft({ ...draft, pattern: event.target.value })}><option value="">Ainda não sei</option>{patterns.map((pattern) => <option key={pattern}>{pattern}</option>)}</select></label>
+                  {draft.pattern === 'Outro' && <label className="field other-detail"><span>Qual outro padrão?</span><input required maxLength={110} value={otherPattern} onChange={(event) => setOtherPattern(event.target.value)} placeholder="Descreva o padrão que percebeu" /></label>}
+                </div>
                 <label className="field"><span>Do que você precisava naquele momento?</span><textarea rows={3} value={draft.need} onChange={(event) => setDraft({ ...draft, need: event.target.value })} placeholder={draftEmotionGroup === 'desconexão' ? 'Descanso, espaço, companhia, algo que faça sentido para você…' : 'Acolhimento, segurança, limite, clareza…'} /></label>
               </div>
               <div className="form-footer"><p><Heart size={16} /> Você não precisa se julgar para se compreender.</p><button className="wine-btn" disabled={saving}>{saving ? <><Loader2 className="spin" size={17} /> Salvando…</> : <>Guardar meu registro <ChevronRight size={17} /></>}</button></div>

@@ -361,3 +361,46 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .urgent-help { left: 15px; right: 15px; bottom: 91px; justify-content: center; max-width: none; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+
+/* Personal profile and entry details */
+.other-option-field { display: grid; align-content: start; gap: 14px; min-width: 0; }
+.other-detail { padding: 14px; border-radius: 12px; background: var(--rose-soft); }
+.profile-button { display: inline-flex; align-items: center; gap: 9px; flex-shrink: 0; border: 0; border-radius: 999px; padding: 3px; background: transparent; color: var(--ink); }
+.profile-button-label { font-size: 11px; font-weight: 700; }
+.profile-avatar { display: block; width: 44px; height: 44px; flex-shrink: 0; border: 2px solid var(--paper); border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 1px var(--rose); }
+.profile-initials { display: grid; place-items: center; background: var(--rose-soft); color: var(--wine); font-size: 21px; font-weight: 700; }
+.profile-space { margin-top: 30px; }
+.profile-form { max-width: 680px; }
+.profile-form fieldset { display: grid; gap: 20px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.profile-form .field > span { font-size: 14px; }
+.profile-photo-editor { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.profile-photo-preview { width: 112px; height: 112px; border-radius: 50%; display: grid; place-items: center; overflow: hidden; background: var(--rose-soft); color: var(--sage); border: 3px solid var(--paper); box-shadow: 0 0 0 1px var(--rose); }
+.profile-photo-preview img { width: 100%; height: 100%; object-fit: cover; }
+.profile-upload { position: relative; display: inline-flex; align-items: center; gap: 8px; overflow: hidden; cursor: pointer; }
+.profile-upload input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.profile-upload:focus-within { outline: 3px solid var(--rose); outline-offset: 3px; }
+.profile-form > [role=alert] { color: #8e493f; }
+.registration-shell { grid-template-columns: minmax(360px, 1fr) minmax(440px, 1fr); }
+.registration-brand-panel { padding: 36px clamp(30px, 4.2vw, 64px) 40px; }
+.registration-message { margin: 0; padding: 30px 0 26px; }
+.registration-message h1 { font-size: clamp(38px, 4.2vw, 58px); }
+.registration-person { flex-direction: column; align-items: flex-start; gap: 18px; width: min(430px, 100%); margin: 0 auto; }
+.registration-person img { width: 100%; height: 470px; border-radius: 24px; object-fit: cover; object-position: center 66%; }
+.registration-person div { gap: 7px; }
+.registration-person span { font-size: 10px; }
+@media (max-width: 900px) {
+  .registration-shell { grid-template-columns: 1fr; }
+  .registration-brand-panel { padding: 30px clamp(24px, 6vw, 60px) 35px; }
+  .registration-message { max-width: 620px; padding: 28px 0; }
+  .registration-person { width: min(470px, 100%); }
+  .registration-person img { height: 510px; }
+}
+@media (max-width: 640px) {
+  .registration-person img { height: 430px; border-radius: 20px; }
+  .registration-message h1 { font-size: 42px; }
+  .profile-button-label { display: none; }
+  .topbar { gap: 12px; align-items: flex-start; }
+  .topbar-actions { gap: 7px; }
+  .profile-avatar { width: 42px; height: 42px; }
+  .profile-photo-editor { gap: 18px; }
+}
