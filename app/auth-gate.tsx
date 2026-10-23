@@ -133,7 +133,10 @@ export default function AuthGate({
         </div>
         <div className="registration-person">
           <img
-            src="/brand/jeniffer-pires.jpeg"
+            src="/brand/cover-garden.jpg"
+            width={790}
+            height={1400}
+            fetchPriority="high"
             alt="Jeniffer Pires escrevendo em um diário"
           />
           <div>
