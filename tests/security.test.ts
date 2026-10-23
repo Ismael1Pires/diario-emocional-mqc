@@ -18,6 +18,8 @@ import * as entries from '../app/api/entries/route';
 import * as reflections from '../app/api/reflections/route';
 import * as settings from '../app/api/settings/route';
 import * as leads from '../app/api/leads/route';
+import { saveMemory } from '../app/memory-client';
+import { filterMemories, memoryDay, type Memory } from '../app/memory-utils';
 import type { NextRequest } from 'next/server';
 beforeEach(reset);
 function req(
@@ -87,6 +89,47 @@ const rejects = (action: () => Promise<unknown>, status: number) =>
     action,
     (e: unknown) => e instanceof HttpError && e.status === status,
   );
+void test('a lost memory response retries once and confirms the single durable record', async (t) => {
+  const a = await login();
+  const draft = { id: crypto.randomUUID(), title: '', category: 'Superações', content: 'Uma vitória com acentos: ação e gratidão. '.repeat(400) };
+  let attempts = 0;
+  t.mock.method(globalThis, 'fetch', async (_input: string, init: RequestInit) => {
+    assert.equal(new Headers(init.headers).get('x-diary-request'), '1');
+    const response = await reflections.POST(req('/api/reflections', 'POST', JSON.parse(init.body as string), a.cookies));
+    assert.equal(response.status, 201);
+    if (++attempts === 1) throw new TypeError('Failed to fetch'); // Commit succeeded; only the response was lost.
+    return response;
+  });
+  const saved = await saveMemory(draft);
+  assert.equal(attempts, 2);
+  assert.equal(saved.id, draft.id);
+  assert.equal(saved.content, draft.content.trim());
+  assert.equal(sqlite.prepare('SELECT count(*) AS n FROM reflections').get()!.n, 1);
+  const replay = await reflections.POST(req('/api/reflections', 'POST', draft, a.cookies));
+  assert.equal((await replay.json() as { reflection: Memory }).reflection.createdAt, saved.createdAt);
+  assert.equal((await reflections.POST(req('/api/reflections', 'POST', { ...draft, content: 'Changed' }, a.cookies))).status, 409);
+  const b = await login('b@example.com', '2');
+  const stolen = await reflections.POST(req('/api/reflections', 'POST', draft, b.cookies));
+  assert.equal(stolen.status, 409);
+  assert.ok(!(await stolen.text()).includes(draft.content));
+  assert.equal((await bodyOf(await reflections.GET(req('/api/reflections', 'GET', undefined, b.cookies)))).reflections.length, 0);
+});
+void test('a connection outage stops after two attempts with a helpful message', async (t) => {
+  let attempts = 0;
+  t.mock.method(globalThis, 'fetch', async () => { attempts++; throw new TypeError('Failed to fetch'); });
+  await assert.rejects(() => saveMemory({ id: crypto.randomUUID(), title: '', category: 'Reflexão livre', content: 'Preserved draft' }), /Seu texto continua aqui/);
+  assert.equal(attempts, 2);
+});
+void test('memory search uses inclusive local registration dates and theme independently of the title', () => {
+  const make = (id: string, createdAt: Date, category = 'Superações'): Memory => ({ id, createdAt: createdAt.getTime() / 1000, category, title: 'Um título esquecido', content: 'Reflexão' });
+  const records = [make('before', new Date(2026, 9, 22, 23, 59)), make('start', new Date(2026, 9, 23, 0, 0)), make('end', new Date(2026, 9, 23, 23, 59, 59)), make('after', new Date(2026, 9, 24)), make('other', new Date(2026, 9, 23, 12), 'Dificuldades')];
+  assert.equal(memoryDay(records[2].createdAt), '2026-10-23');
+  assert.deepEqual(filterMemories(records, 'Superações', '2026-10-23', '2026-10-23').map((r) => r.id), ['start', 'end']);
+  assert.equal(filterMemories(records, 'Todas', '', '').length, 5);
+  assert.equal(filterMemories(records, 'Dificuldades', '', '').length, 1);
+  assert.equal(filterMemories(records, 'Todas', '2026-10-24', '').length, 1);
+  assert.equal(filterMemories(records, 'Todas', '', '2026-10-22').length, 1);
+});
 void test('OTP, browser binding, cookies, hash storage and authenticated identity', async () => {
   const c = await challenge();
   assert.match(c.code, /^\d{8}$/);
