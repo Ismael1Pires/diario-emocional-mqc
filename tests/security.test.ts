@@ -657,7 +657,7 @@ void test('retired payment endpoints cannot create charges and webhook retries d
 void test('profile name and uploaded photo persist only for their authenticated owner', async () => {
   const a = await login();
   const b = await login('profile-b@example.com', '2');
-  const avatar = 'data:image/png;base64,' + readFileSync('public/brand/diary-icon-32.png').toString('base64');
+  const avatar = 'data:image/png;base64,' + btoa(String.fromCharCode(...readFileSync('public/brand/diary-icon-32.png')));
   assert.equal((await profileApi.GET(req('/api/profile'))).status, 401);
   assert.equal((await profileApi.PUT(req('/api/profile', 'PUT', { name: 'Forged', avatar }, '', { 'x-visitor-id': a.user.id }))).status, 401);
   assert.equal((await profileApi.PUT(req('/api/profile', 'PUT', { name: 'Cross-site', avatar }, a.cookies, { origin: 'https://evil.test' }))).status, 403);
