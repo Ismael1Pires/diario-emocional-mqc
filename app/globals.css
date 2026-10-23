@@ -204,7 +204,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .reflection-writing { margin: 22px 0; }
 .reflection-writing textarea { font: 18px/1.8 var(--font-serif); min-height: 300px; }
 .reflection-editor .field > span, .reflection-filters .field > span { font-size: 14px; }
-.reflection-filters { margin-bottom: 22px; }
+.reflection-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.reflection-filters { margin-bottom: 22px; grid-template-columns: 1.3fr 1fr 1fr; align-items: end; }
 .reflection-memory p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .reflection-memory h3 { font: 600 25px/1.3 var(--font-serif); overflow-wrap: anywhere; }
 .reflection-memory small { font-size: 13px; color: var(--muted); }
